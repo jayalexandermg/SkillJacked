@@ -1,7 +1,25 @@
-﻿node_modules
+node_modules
 .env
+.env.*
 .next
 dist
 *.tsbuildinfo
 logs/
+
+# Claude Code local settings
+.claude/settings.local.json
 .claude/data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temp/test files
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+
+# Vercel
+.vercel
