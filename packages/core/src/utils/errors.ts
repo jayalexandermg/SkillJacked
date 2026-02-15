@@ -25,3 +25,10 @@ export class ValidationError extends SkillJackError {
     this.name = 'ValidationError';
   }
 }
+
+export class SegmenterParseError extends TransformError {
+  constructor(message: string, public rawOutput: string) {
+    super(message);
+    this.name = 'SegmenterParseError';
+  }
+}

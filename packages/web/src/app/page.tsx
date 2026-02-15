@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Hero from '@/components/hero';
 import UrlInput from '@/components/url-input';
 import LoadingState from '@/components/loading-state';
@@ -10,8 +10,10 @@ import InstallGuide from '@/components/install-guide';
 import HowItWorks from '@/components/how-it-works';
 import ComingSoon from '@/components/coming-soon';
 import Footer from '@/components/footer';
-import { jackSkill } from '@/lib/api-client';
+import AuthModal from '@/components/auth-modal';
+import { jackSkill, signup } from '@/lib/api-client';
 import { saveSkill } from '@/lib/storage';
+import { isAuthenticated, setToken } from '@/lib/auth';
 
 type Format = 'claude-skill' | 'cursor-rules' | 'windsurf-rules';
 
@@ -37,6 +39,23 @@ export default function Home() {
   const [skillData, setSkillData] = useState<SkillData | null>(null);
   const [format, setFormat] = useState<Format>('claude-skill');
   const [errorMessage, setErrorMessage] = useState('');
+  const [showAuth, setShowAuth] = useState(false);
+  const [authed, setAuthed] = useState(false);
+
+  useEffect(() => {
+    setAuthed(isAuthenticated());
+  }, []);
+
+  const handleAuth = async (email: string) => {
+    try {
+      const res = await signup(email);
+      setToken(res.token);
+      setAuthed(true);
+      setShowAuth(false);
+    } catch {
+      // silent fail for MVP
+    }
+  };
 
   const handleSubmit = useCallback(async (url: string) => {
     setState('loading');
@@ -91,8 +110,25 @@ export default function Home() {
 
   return (
     <main className="min-h-screen">
+      {/* Top bar */}
+      <nav className="flex items-center justify-between px-6 pt-6 max-w-5xl mx-auto">
+        <a href="/dashboard" className="text-text-secondary hover:text-text-primary text-sm transition-colors">
+          My Skills
+        </a>
+        {!authed && (
+          <button
+            onClick={() => setShowAuth(true)}
+            className="px-4 py-2 bg-accent text-primary font-body font-semibold text-sm
+                       rounded-lg hover:bg-accent-hover hover:gold-glow
+                       transition-all duration-200"
+          >
+            Sign Up for Early Access
+          </button>
+        )}
+      </nav>
+
       {/* Hero + Tool Section */}
-      <section className="pt-24 pb-16 px-6">
+      <section className="pt-12 pb-16 px-6">
         <div className="max-w-4xl mx-auto">
           <Hero />
 
@@ -160,6 +196,12 @@ export default function Home() {
 
       {/* Footer */}
       <Footer />
+
+      <AuthModal
+        open={showAuth}
+        onClose={() => setShowAuth(false)}
+        onSubmit={handleAuth}
+      />
     </main>
   );
 }

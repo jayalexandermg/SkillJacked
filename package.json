@@ -1,5 +1,10 @@
 {
   "name": "skilljack",
   "private": true,
-  "workspaces": ["packages/*"]
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
 }

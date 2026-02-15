@@ -1,8 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { SKILL_EXTRACTION_PROMPT } from './prompts';
-import { StructuredSkill } from './types';
+import { SKILL_GENERATOR_SYSTEM_PROMPT } from './runtime-prompts';
+import { StructuredSkill, SkillPlan, SkillSegment } from './types';
 import { RawContent } from '../extractor/types';
 import { TransformError } from '../utils/errors';
+import { normalizeTranscript } from './normalize-transcript';
 
 // --- Fix 4: Anthropic API timeout ---
 const ANTHROPIC_TIMEOUT_MS = 60_000; // 60s
@@ -71,4 +73,96 @@ export async function generateSkill(
     generatedAt: new Date().toISOString(),
     content: text,
   };
+}
+
+export interface GenerateFromPlanOpts {
+  apiKey?: string;
+  /** How many skills to generate. Defaults to 1 (highest priority). */
+  count?: number;
+}
+
+/**
+ * Generate StructuredSkill(s) from a SkillPlan by slicing transcript excerpts
+ * and calling the per-segment SKILL_GENERATOR_SYSTEM_PROMPT.
+ */
+export async function generateSkillsFromPlan(
+  rawContent: RawContent,
+  plan: SkillPlan,
+  opts: GenerateFromPlanOpts = {},
+): Promise<StructuredSkill[]> {
+  const { apiKey, count = 1 } = opts;
+  const client = new Anthropic({ apiKey });
+
+  const normalized = normalizeTranscript(rawContent.transcript);
+  const lines = normalized.split('\n');
+
+  // Pick the top segment(s) by priority (lower number = higher priority), then by order
+  const sorted = [...plan.segments].sort(
+    (a: SkillSegment, b: SkillSegment) => a.priority - b.priority || a.start_line - b.start_line,
+  );
+  const targets = sorted.slice(0, count);
+
+  const skills: StructuredSkill[] = [];
+
+  for (const segment of targets) {
+    const excerpt = lines.slice(segment.start_line, segment.end_line + 1).join('\n');
+
+    const userMessage = [
+      `Video Title: ${rawContent.title}`,
+      `Video URL: ${rawContent.sourceUrl}`,
+      rawContent.duration ? `Duration: ${rawContent.duration}` : null,
+      `Segment: ${segment.proposed_name}`,
+      `Segment Description: ${segment.description}`,
+      '',
+      'TRANSCRIPT EXCERPT:',
+      excerpt,
+    ]
+      .filter((l) => l !== null)
+      .join('\n');
+
+    let response;
+    try {
+      response = await client.messages.create(
+        {
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4096,
+          system: SKILL_GENERATOR_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: userMessage }],
+        },
+        { signal: AbortSignal.timeout(ANTHROPIC_TIMEOUT_MS) },
+      );
+    } catch (err: unknown) {
+      const error = err as Error & { status?: number };
+      if (error.status === 429) {
+        throw new TransformError('Too many requests. Please wait a moment and try again.');
+      }
+      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+        throw new TransformError('AI extraction timed out. Please try again.');
+      }
+      throw new TransformError('AI extraction failed. Please try again in a moment.');
+    }
+
+    if (!response.content || response.content.length === 0) {
+      throw new TransformError('AI returned no content. Please try again.');
+    }
+    const block = response.content[0];
+    if (block.type !== 'text') {
+      throw new TransformError('AI extraction failed. Please try again in a moment.');
+    }
+
+    const text = block.text;
+    const nameMatch = text.match(/^name:\s*(.+)$/m);
+    const rawName = nameMatch ? nameMatch[1].trim() : segment.proposed_slug;
+    const name = sanitizeSkillName(rawName);
+
+    skills.push({
+      name,
+      sourceTitle: rawContent.title,
+      sourceUrl: rawContent.sourceUrl,
+      generatedAt: new Date().toISOString(),
+      content: text,
+    });
+  }
+
+  return skills;
 }

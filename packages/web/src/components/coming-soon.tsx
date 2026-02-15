@@ -49,9 +49,17 @@ export default function ComingSoon() {
         </div>
 
         <div className="text-center mt-12">
-          <p className="text-text-tertiary text-sm">
-            Create a free account to save your skills and get early access.
+          <p className="text-text-secondary text-sm mb-4">
+            Sign up to save your skills and get early access.
           </p>
+          <a
+            href="/dashboard"
+            className="inline-block px-6 py-3 bg-accent text-primary font-body font-semibold
+                       text-sm rounded-lg hover:bg-accent-hover hover:gold-glow
+                       transition-all duration-200"
+          >
+            Sign Up for Early Access
+          </a>
         </div>
       </div>
     </section>
