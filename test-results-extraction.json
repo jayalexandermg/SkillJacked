@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-02-15T13:32:04.653Z",
+  "summary": {
+    "total": 5,
+    "passed": 0,
+    "failed": 5
+  },
+  "results": [
+    {
+      "url": "https://www.youtube.com/watch?v=WUvTyaaNkzM",
+      "description": "educational video",
+      "success": false,
+      "error": "This video doesn't have captions. Try a different video.",
+      "duration_ms": 605
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=r4O9joFxJKM",
+      "description": "educational video",
+      "success": false,
+      "error": "Could not fetch video metadata. Check that the URL is valid.",
+      "duration_ms": 30
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=UB1O30fR-EE",
+      "description": "tutorials video",
+      "success": false,
+      "error": "This video doesn't have captions. Try a different video.",
+      "duration_ms": 1009
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=qp0HIF3SfI4",
+      "description": "talks video",
+      "success": false,
+      "error": "This video doesn't have captions. Try a different video.",
+      "duration_ms": 947
+    },
+    {
+      "url": "https://www.youtube.com/shorts/kYfNvmF0Bqw",
+      "description": "shorts video",
+      "success": false,
+      "error": "This video doesn't have captions. Try a different video.",
+      "duration_ms": 742
+    }
+  ]
+}

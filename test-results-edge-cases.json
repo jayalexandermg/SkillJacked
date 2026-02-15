@@ -1,0 +1,157 @@
+{
+  "timestamp": "2026-02-15T13:38:44.645Z",
+  "summary": {
+    "total": 21,
+    "passed": 21,
+    "failed": 0
+  },
+  "results": [
+    {
+      "testName": "Parse Standard watch URL",
+      "input": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "expected": "Valid parsed result",
+      "actual": "videoId=dQw4w9WgXcQ",
+      "passed": true
+    },
+    {
+      "testName": "Parse Short youtu.be URL",
+      "input": "https://youtu.be/dQw4w9WgXcQ",
+      "expected": "Valid parsed result",
+      "actual": "videoId=dQw4w9WgXcQ",
+      "passed": true
+    },
+    {
+      "testName": "Parse Embed URL",
+      "input": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+      "expected": "Valid parsed result",
+      "actual": "videoId=dQw4w9WgXcQ",
+      "passed": true
+    },
+    {
+      "testName": "Parse Shorts URL",
+      "input": "https://www.youtube.com/shorts/kYfNvmF0Bqw",
+      "expected": "Valid parsed result",
+      "actual": "videoId=kYfNvmF0Bqw",
+      "passed": true
+    },
+    {
+      "testName": "Parse Mobile URL",
+      "input": "https://m.youtube.com/watch?v=dQw4w9WgXcQ",
+      "expected": "Valid parsed result",
+      "actual": "videoId=dQw4w9WgXcQ",
+      "passed": true
+    },
+    {
+      "testName": "Parse URL with timestamp",
+      "input": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30",
+      "expected": "Valid parsed result",
+      "actual": "videoId=dQw4w9WgXcQ",
+      "passed": true
+    },
+    {
+      "testName": "Parse URL with playlist",
+      "input": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLtest",
+      "expected": "Valid parsed result",
+      "actual": "videoId=dQw4w9WgXcQ",
+      "passed": true
+    },
+    {
+      "testName": "Reject Empty string",
+      "input": "",
+      "expected": "ValidationError",
+      "actual": "Caught error",
+      "passed": true
+    },
+    {
+      "testName": "Reject Random text",
+      "input": "not a url",
+      "expected": "ValidationError",
+      "actual": "Caught error",
+      "passed": true
+    },
+    {
+      "testName": "Reject Vimeo URL",
+      "input": "https://vimeo.com/12345",
+      "expected": "ValidationError",
+      "actual": "Caught error",
+      "passed": true
+    },
+    {
+      "testName": "Reject YouTube homepage",
+      "input": "https://www.youtube.com/",
+      "expected": "ValidationError",
+      "actual": "Caught error",
+      "passed": true
+    },
+    {
+      "testName": "Reject Watch without video ID",
+      "input": "https://www.youtube.com/watch",
+      "expected": "ValidationError",
+      "actual": "Caught error",
+      "passed": true
+    },
+    {
+      "testName": "Reject Empty video ID",
+      "input": "https://www.youtube.com/watch?v=",
+      "expected": "ValidationError",
+      "actual": "Caught error",
+      "passed": true
+    },
+    {
+      "testName": "Reject Short video ID (invalid)",
+      "input": "https://www.youtube.com/watch?v=abc",
+      "expected": "ValidationError",
+      "actual": "Caught error",
+      "passed": true
+    },
+    {
+      "testName": "Reject HTTP instead of HTTPS",
+      "input": "http://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "expected": "ValidationError",
+      "actual": "Caught error",
+      "passed": true
+    },
+    {
+      "testName": "Reject Malicious lookalike domain",
+      "input": "https://youtube.com.malicious.com/watch?v=dQw4w9WgXcQ",
+      "expected": "ValidationError",
+      "actual": "Caught error",
+      "passed": true
+    },
+    {
+      "testName": "Reject JavaScript injection",
+      "input": "javascript:alert(1)",
+      "expected": "ValidationError",
+      "actual": "Caught error",
+      "passed": true
+    },
+    {
+      "testName": "Reject Path traversal attempt",
+      "input": "https://www.youtube.com/watch?v=../../etc/passwd",
+      "expected": "ValidationError",
+      "actual": "Caught error",
+      "passed": true
+    },
+    {
+      "testName": "Extract Working video (Rick Astley)",
+      "input": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "expected": "Successful extraction",
+      "actual": "Got 2089 chars",
+      "passed": true
+    },
+    {
+      "testName": "Extract Non-existent video ID",
+      "input": "https://www.youtube.com/watch?v=INVALID12345",
+      "expected": "ExtractionError",
+      "actual": "Caught error as expected",
+      "passed": true
+    },
+    {
+      "testName": "Extract Blocked video (Traversy Media)",
+      "input": "https://www.youtube.com/watch?v=UB1O30fR-EE",
+      "expected": "ExtractionError",
+      "actual": "Caught error as expected",
+      "passed": true
+    }
+  ]
+}
