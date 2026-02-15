@@ -38,6 +38,16 @@ packages/
 npm install
 ```
 
+### API Key Setup
+
+One-time setup — saves your key locally so you don't need to export it every session:
+
+```bash
+skilljack config set-key sk-ant-...
+```
+
+The `ANTHROPIC_API_KEY` environment variable still works and takes priority over the saved key.
+
 ## License
 
 [MIT](LICENSE)

@@ -1,0 +1,3 @@
+I notice that you've provided the video metadata and segment description, but the actual transcript excerpt is missing. I need the transcript content to extract the specific actionable knowledge about creating and using Claude.md files.
+
+Could you please provide the transcript excerpt that covers the "Configure Claude.md for Custom Instructions" segment? Once I have that content, I'll be able to create the skill file with the specific techniques, workflows, and implementation details from the video.

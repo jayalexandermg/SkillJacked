@@ -5,7 +5,7 @@
   "types": "src/index.ts",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "youtube-transcript": "^1.2.1"
+    "youtube-transcript-plus": "^1.0.0"
   },
   "devDependencies": {
     "typescript": "^5.3.0",
