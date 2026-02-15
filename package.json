@@ -1,1 +1,5 @@
-﻿{"name":"skilljack","private":true,"workspaces":["packages/*"]}
+{
+  "name": "skilljack",
+  "private": true,
+  "workspaces": ["packages/*"]
+}

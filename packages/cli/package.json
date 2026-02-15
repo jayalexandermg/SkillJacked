@@ -1,0 +1,18 @@
+{
+  "name": "skilljack",
+  "version": "1.0.0",
+  "bin": {
+    "skilljack": "./src/index.ts"
+  },
+  "dependencies": {
+    "@skilljack/core": "*",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "ora": "^8.0.0",
+    "tsx": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^20.0.0"
+  }
+}
