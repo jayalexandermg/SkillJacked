@@ -3,6 +3,7 @@ import { SkillPlan } from './types';
 import { SEGMENTER_SYSTEM_PROMPT, SEGMENTER_REPAIR_SYSTEM_PROMPT } from './runtime-prompts';
 import { normalizeTranscript } from './normalize-transcript';
 import { SegmenterParseError } from '../utils/errors';
+import { withRetry, type RetryOpts } from '../utils/retry';
 
 const ANTHROPIC_TIMEOUT_MS = 90_000;
 
@@ -17,6 +18,8 @@ export interface SegmenterOpts {
   maxSegments?: number;
   minLines?: number;
   apiKey?: string;
+  maxRetries?: number;
+  onRetry?: (msg: string) => void;
 }
 
 function extractJSON(raw: string): string {
@@ -66,8 +69,9 @@ export async function segmentTranscript(
   input: SegmenterInput,
   opts: SegmenterOpts = {},
 ): Promise<SkillPlan> {
-  const { maxSegments = 12, minLines = 5, apiKey } = opts;
+  const { maxSegments = 12, minLines = 5, apiKey, maxRetries = 3, onRetry } = opts;
   const client = new Anthropic({ apiKey });
+  const retryOpts: RetryOpts = { maxRetries, onRetry };
 
   const normalized = normalizeTranscript(input.transcript);
 
@@ -86,7 +90,10 @@ export async function segmentTranscript(
 
   let rawOutput: string;
   try {
-    rawOutput = await callClaude(client, SEGMENTER_SYSTEM_PROMPT, userMessage);
+    rawOutput = await withRetry(
+      () => callClaude(client, SEGMENTER_SYSTEM_PROMPT, userMessage),
+      retryOpts,
+    );
   } catch (err) {
     throw new SegmenterParseError(
       `Segmenter API call failed: ${(err as Error).message}`,
@@ -104,10 +111,13 @@ export async function segmentTranscript(
   // Retry with repair prompt
   let repairOutput: string;
   try {
-    repairOutput = await callClaude(
-      client,
-      SEGMENTER_REPAIR_SYSTEM_PROMPT,
-      `The following output was invalid JSON. Fix it:\n\n${rawOutput}`,
+    repairOutput = await withRetry(
+      () => callClaude(
+        client,
+        SEGMENTER_REPAIR_SYSTEM_PROMPT,
+        `The following output was invalid JSON. Fix it:\n\n${rawOutput}`,
+      ),
+      retryOpts,
     );
   } catch (err) {
     throw new SegmenterParseError(

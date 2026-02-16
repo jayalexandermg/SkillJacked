@@ -7,7 +7,12 @@ const configFile = join(paths.config, 'config.json');
 
 export type Config = {
   anthropicApiKey?: string;
+  hasOnboarded?: boolean;
 };
+
+export function configPath(): string {
+  return configFile;
+}
 
 export function loadConfig(): Config {
   try {
@@ -28,9 +33,25 @@ export function setApiKey(key: string): void {
   saveConfig(cfg);
 }
 
+export function unsetApiKey(): void {
+  const cfg = loadConfig();
+  delete cfg.anthropicApiKey;
+  saveConfig(cfg);
+}
+
 export function getApiKey(): string | undefined {
   if (process.env.ANTHROPIC_API_KEY) {
     return process.env.ANTHROPIC_API_KEY;
   }
   return loadConfig().anthropicApiKey;
+}
+
+export function hasOnboarded(): boolean {
+  return loadConfig().hasOnboarded === true;
+}
+
+export function setOnboarded(): void {
+  const cfg = loadConfig();
+  cfg.hasOnboarded = true;
+  saveConfig(cfg);
 }

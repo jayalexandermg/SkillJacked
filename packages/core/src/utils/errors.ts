@@ -12,10 +12,20 @@ export class ExtractionError extends SkillJackError {
   }
 }
 
+export interface TransformErrorDetails {
+  kind: 'api' | 'validation' | 'parse' | 'timeout';
+  statusCode?: number;
+  errorType?: string;
+  requestId?: string;
+  detail?: string;
+}
+
 export class TransformError extends SkillJackError {
-  constructor(message: string) {
+  public details?: TransformErrorDetails;
+  constructor(message: string, details?: TransformErrorDetails) {
     super(message, 'TRANSFORM_ERROR');
     this.name = 'TransformError';
+    this.details = details;
   }
 }
 

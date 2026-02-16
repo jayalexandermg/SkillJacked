@@ -1,19 +1,24 @@
 {
-  "name": "skilljack",
+  "name": "skilljacked",
   "version": "1.0.0",
   "bin": {
-    "skilljack": "./src/index.ts"
+    "skilljacked": "./dist/index.mjs"
+  },
+  "main": "./dist/index.mjs",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup"
   },
   "dependencies": {
-    "@skilljack/core": "*",
+    "@skilljack/core": "workspace:*",
     "chalk": "^5.3.0",
     "commander": "^12.0.0",
     "env-paths": "^4.0.0",
-    "ora": "^8.0.0",
-    "tsx": "^4.0.0"
+    "ora": "^8.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
     "typescript": "^5.3.0"
   }
 }

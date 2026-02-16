@@ -61,8 +61,10 @@ export async function extractYouTube(videoId: string, sourceUrl: string): Promis
     if (err.name === 'ExtractionError') throw err;
 
     const errorMsg = err.message || String(err);
-    if (errorMsg.includes('No transcripts') || errorMsg.includes('not available')) {
-      throw new ExtractionError("This video doesn't have captions or they are not accessible. This may be due to YouTube restrictions. Try a different video.");
+    if (errorMsg.includes('No transcripts') || errorMsg.includes('not available') || errorMsg.includes('disabled')) {
+      throw new ExtractionError(
+        "Transcripts are disabled for this video. Try another video or provide a local transcript file:\n  skilljacked ingest <url> --transcript-file ./path/to/transcript.txt --multi --max 10"
+      );
     }
     throw new ExtractionError(`Failed to fetch transcript: ${errorMsg.substring(0, 100)}`);
   }

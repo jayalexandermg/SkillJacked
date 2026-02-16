@@ -4,7 +4,14 @@
   "workspaces": [
     "packages/*"
   ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
+  },
   "devDependencies": {
     "tsx": "^4.21.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   }
 }

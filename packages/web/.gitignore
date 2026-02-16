@@ -1,1 +1,55 @@
 .vercel
+skills/
+.env
+# Env / Secrets
+.env
+.env.*
+!.env.example
+
+# Node / Packages
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build / Dist
+dist/
+build/
+.out/
+.next/
+.nuxt/
+
+# Logs
+logs/
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vercel
+.vercel/
+
+# Generated Output (SkillJacked)
+skills/
+
+# Temporary files
+*.tmp
+*.temp
+_permission_test.tmp
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Coverage / Testing
+coverage/
+
+# Tailwind / PostCSS caches
+.cache/

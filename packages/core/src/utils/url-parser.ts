@@ -50,6 +50,9 @@ export function parseUrl(rawUrl: string): ParsedUrl {
   } else if (parsed.pathname.startsWith('/shorts/')) {
     // https://www.youtube.com/shorts/VIDEO_ID
     videoId = parsed.pathname.split('/')[2];
+  } else if (parsed.pathname.startsWith('/live/')) {
+    // https://www.youtube.com/live/VIDEO_ID
+    videoId = parsed.pathname.split('/')[2];
   }
 
   if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {

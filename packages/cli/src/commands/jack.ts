@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import {
   jackSkill,
   SkillJackError,
+  TransformError,
   type OutputFormat,
   type FormattedOutput,
 } from '@skilljack/core';
@@ -27,9 +28,17 @@ export const jackCommand = new Command('jack')
   .argument('<url>', 'YouTube video URL')
   .option('-f, --format <format>', 'Output format: claude, cursor, windsurf', 'claude')
   .option('-a, --all', 'Generate all formats')
+  .option('--retries <n>', 'Max retries per API call', '3')
+  .option('--debug', 'Show detailed error diagnostics')
   .option('-o, --output <dir>', 'Output directory', '.')
-  .action(async (url: string, opts: { format: string; all?: boolean; output: string }) => {
-    const apiKey = resolveApiKey();
+  .action(async (url: string, opts: { format: string; all?: boolean; retries: string; debug?: boolean; output: string }) => {
+    const apiKey = await resolveApiKey();
+    const maxRetries = parseInt(opts.retries, 10);
+
+    if (isNaN(maxRetries) || maxRetries < 0) {
+      console.error(chalk.red('--retries must be a non-negative integer'));
+      process.exit(1);
+    }
 
     // Validate format flag
     if (!opts.all && !FORMAT_MAP[opts.format]) {
@@ -64,7 +73,12 @@ export const jackCommand = new Command('jack')
       const writtenPaths: string[] = [];
 
       for (const format of formats) {
-        const { formatted } = await jackSkill(url, { format, apiKey });
+        const { formatted } = await jackSkill(url, {
+          format,
+          apiKey,
+          maxRetries,
+          onRetry: opts.debug ? (msg) => { spinner.info(chalk.dim(msg)); spinner.start(SPINNER_MESSAGES[messageIndex]); } : undefined,
+        });
         const filePath = await writeSkillFile(formatted, opts.output);
         writtenPaths.push(filePath);
       }
@@ -87,6 +101,22 @@ export const jackCommand = new Command('jack')
         spinner.fail(chalk.red(`Unexpected error: ${error.message}`));
       } else {
         spinner.fail(chalk.red('An unknown error occurred.'));
+      }
+
+      if (opts.debug && error instanceof TransformError && error.details) {
+        const d = error.details;
+        console.error('');
+        console.error(chalk.yellow('Debug diagnostics:'));
+        console.error(chalk.dim(`  Error kind:   ${d.kind}`));
+        if (d.statusCode) console.error(chalk.dim(`  Status code:  ${d.statusCode}`));
+        if (d.errorType) console.error(chalk.dim(`  Error type:   ${d.errorType}`));
+        if (d.detail)    console.error(chalk.dim(`  Detail:       ${d.detail}`));
+        if (d.requestId) console.error(chalk.dim(`  Request ID:   ${d.requestId}`));
+      } else if (opts.debug && error instanceof Error) {
+        console.error('');
+        console.error(chalk.yellow('Debug diagnostics:'));
+        console.error(chalk.dim(`  Error class:  ${error.constructor.name}`));
+        console.error(chalk.dim(`  Message:      ${error.message}`));
       }
 
       process.exit(1);
