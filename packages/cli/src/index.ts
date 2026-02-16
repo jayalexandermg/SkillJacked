@@ -11,7 +11,7 @@ const program = new Command();
 program
   .name('skilljacked')
   .description('Turn any YouTube video into a Claude Code skill')
-  .version('1.0.0')
+  .version('0.1.0')
   .option('--wizard', 'Force the setup wizard')
   .option('--no-wizard', 'Skip the setup wizard')
   .addCommand(jackCommand)
