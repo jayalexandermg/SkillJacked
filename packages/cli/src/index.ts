@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { Command } from 'commander';
 import { jackCommand } from './commands/jack';
 import { ingestCommand } from './commands/ingest';
@@ -6,12 +9,16 @@ import { initCommand } from './commands/init';
 import { hasOnboarded } from './utils/config';
 import { runWizard, isTTY, printNonInteractiveHelp } from './wizard';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
+
 const program = new Command();
 
 program
   .name('skilljacked')
   .description('Turn any YouTube video into a Claude Code skill')
-  .version('0.1.0')
+  .version(pkg.version)
   .option('--wizard', 'Force the setup wizard')
   .option('--no-wizard', 'Skip the setup wizard')
   .addCommand(jackCommand)
