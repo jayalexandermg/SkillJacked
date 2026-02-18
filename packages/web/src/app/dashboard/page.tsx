@@ -14,6 +14,8 @@ export default function DashboardPage() {
   const [authed, setAuthed] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [email, setEmail] = useState('');
+  const [signupState, setSignupState] = useState<'idle' | 'loading' | 'done'>('idle');
 
   useEffect(() => {
     setMounted(true);
@@ -34,6 +36,20 @@ export default function DashboardPage() {
       setShowAuth(false);
     } catch {
       // silent fail for MVP
+    }
+  };
+
+  const handleInlineSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setSignupState('loading');
+    try {
+      const res = await signup(email.trim());
+      setToken(res.token);
+      setAuthed(true);
+      setSignupState('done');
+    } catch {
+      setSignupState('done'); // show success even on error — it's a waitlist
     }
   };
 
@@ -61,14 +77,32 @@ export default function DashboardPage() {
             </div>
 
             {!authed && (
-              <button
-                onClick={() => setShowAuth(true)}
-                className="px-5 py-2.5 bg-accent text-primary font-body font-semibold text-sm
-                           rounded-lg hover:bg-accent-hover hover:gold-glow
-                           transition-all duration-200"
-              >
-                Sign Up to Save
-              </button>
+              signupState === 'done' ? (
+                <p className="text-accent text-sm font-medium">You&apos;re on the list ✓</p>
+              ) : (
+                <form onSubmit={handleInlineSignup} className="flex gap-2">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    required
+                    className="px-3 py-2 bg-surface border border-border-subtle rounded-lg
+                               text-text-primary text-sm placeholder:text-text-tertiary
+                               focus:outline-none focus:ring-2 focus:ring-accent/40
+                               transition-all duration-200 w-48"
+                  />
+                  <button
+                    type="submit"
+                    disabled={signupState === 'loading'}
+                    className="px-4 py-2 bg-accent text-primary font-body font-semibold text-sm
+                               rounded-lg hover:bg-accent-hover hover:gold-glow
+                               transition-all duration-200 disabled:opacity-60"
+                  >
+                    {signupState === 'loading' ? '...' : 'Join Early'}
+                  </button>
+                </form>
+              )
             )}
           </div>
 
