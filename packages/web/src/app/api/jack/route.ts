@@ -10,7 +10,7 @@ import type { OutputFormat } from '@skilljack/core';
 
 // --- In-memory rate limiter ---
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT = 5;
+const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 function getClientIp(request: NextRequest): string {
