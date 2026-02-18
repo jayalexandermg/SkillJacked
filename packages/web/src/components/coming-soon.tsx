@@ -21,7 +21,7 @@ export default function ComingSoon() {
           What&apos;s <span className="text-accent">next</span>
         </h2>
         <p className="text-text-secondary text-center mb-16 max-w-lg mx-auto">
-          We&apos;re building more ways to supercharge your AI coding workflow.
+          More power is on the way — here&apos;s what&apos;s coming next.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -29,15 +29,17 @@ export default function ComingSoon() {
             <div
               key={feature.title}
               className="p-6 bg-surface border border-border-subtle rounded-lg
-                         hover:border-border-focus hover:translate-y-[-2px]
-                         transition-all duration-300 group"
+                         hover:-translate-y-1 hover:border-accent/50
+                         hover:shadow-[0_0_12px_rgba(var(--color-accent),0.2)]
+                         transition-all duration-200 group"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-heading text-lg font-semibold text-text-primary">
                   {feature.title}
                 </h3>
                 <span className="text-xs font-mono text-accent-secondary bg-primary
-                                 px-2 py-1 rounded border border-border-subtle">
+                                 px-2 py-1 rounded border border-border-subtle
+                                 animate-[pulse-glow_2s_ease-in-out_infinite]">
                   Soon
                 </span>
               </div>
@@ -50,7 +52,7 @@ export default function ComingSoon() {
 
         <div className="text-center mt-12">
           <p className="text-text-secondary text-sm mb-4">
-            Sign up to save your skills and get early access.
+            Join early. Save your skills. Shape what gets built next.
           </p>
           <a
             href="/dashboard"

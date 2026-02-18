@@ -7,12 +7,12 @@ const steps = [
   {
     number: '02',
     title: 'AI Extracts',
-    description: 'We pull the transcript and distill it into a structured skill.',
+    description: 'Our AI analyzes the transcript and transforms it into a structured, ready-to-use skill.',
   },
   {
     number: '03',
     title: 'Install Skill',
-    description: 'Download the file and drop it into your AI coding tool.',
+    description: 'Install the skill in your AI coding tool and put it to work instantly.',
   },
 ];
 

@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jackSkill, SkillJackError } from '@skilljack/core';
+import {
+  extract,
+  segmentTranscript,
+  generateSkillsFromPlan,
+  format as formatSkill,
+  SkillJackError,
+} from '@skilljack/core';
 import type { OutputFormat } from '@skilljack/core';
 
-// --- Fix 1: In-memory rate limiter ---
+// --- In-memory rate limiter ---
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -28,7 +34,7 @@ function isRateLimited(ip: string): boolean {
   return entry.count > RATE_LIMIT;
 }
 
-// --- Fix 4: Request body size cap ---
+// Request body size cap
 const MAX_BODY_BYTES = 1024; // 1KB — sufficient for URL + format
 
 export async function POST(request: NextRequest) {
@@ -42,7 +48,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Cap request body size
     const rawBody = await request.text();
     if (rawBody.length > MAX_BODY_BYTES) {
       return NextResponse.json(
@@ -68,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     const VALID_FORMATS: OutputFormat[] = ['claude-skill', 'cursor-rules', 'windsurf-rules'];
-    const format: OutputFormat = VALID_FORMATS.includes(rawFormat as OutputFormat)
+    const outputFormat: OutputFormat = VALID_FORMATS.includes(rawFormat as OutputFormat)
       ? (rawFormat as OutputFormat)
       : 'claude-skill';
 
@@ -81,27 +86,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await jackSkill(url, {
-      format,
+    // Multi-skill pipeline: extract → segment → generate up to 10 skills
+    const rawContent = await extract(url);
+
+    const plan = await segmentTranscript(rawContent, {
+      maxSegments: 10,
       apiKey,
     });
 
-    return NextResponse.json({
-      skill: {
-        name: result.skill.name,
-        sourceTitle: result.skill.sourceTitle,
-        sourceUrl: result.skill.sourceUrl,
-        generatedAt: result.skill.generatedAt,
-        content: result.skill.content,
-      },
-      formatted: {
-        content: result.formatted.content,
-        filename: result.formatted.filename,
-        format: result.formatted.format,
-      },
+    const { skills } = await generateSkillsFromPlan(rawContent, plan, {
+      count: 10,
+      concurrency: 3,
+      apiKey,
     });
+
+    const results = skills.map((skill) => {
+      const formatted = formatSkill(skill, outputFormat);
+      return {
+        skill: {
+          name: skill.name,
+          sourceTitle: skill.sourceTitle,
+          sourceUrl: skill.sourceUrl,
+          generatedAt: skill.generatedAt,
+          content: skill.content,
+        },
+        formatted: {
+          content: formatted.content,
+          filename: formatted.filename,
+          format: formatted.format,
+        },
+      };
+    });
+
+    return NextResponse.json({ skills: results });
   } catch (err: unknown) {
-    // --- Fix 7: Only expose SkillJackError messages, sanitize the rest ---
     console.error('[/api/jack] Error:', err);
 
     if (err instanceof SkillJackError) {

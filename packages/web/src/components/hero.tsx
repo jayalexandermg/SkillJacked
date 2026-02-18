@@ -6,9 +6,7 @@ export default function Hero() {
         <span className="text-accent gold-text-glow">Start doing.</span>
       </h1>
       <p className="text-text-secondary text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
-        Turn any YouTube video into a{' '}
-        <span className="text-text-primary font-medium">Claude Code skill</span>{' '}
-        in 10 seconds.
+        Paste any YouTube URL. Get ready to use agent skill.md files and upgrade your agents seamlessly.
       </p>
     </div>
   );

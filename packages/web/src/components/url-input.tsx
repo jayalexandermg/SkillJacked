@@ -30,6 +30,7 @@ export default function UrlInput({ onSubmit, disabled = false }: UrlInputProps) 
           className="flex-1 px-5 py-4 bg-surface border border-border-subtle rounded-lg
                      text-text-primary placeholder:text-text-tertiary font-body text-base
                      focus:outline-none focus:border-border-focus focus:gold-glow-subtle
+                     focus:ring-2 focus:ring-accent/40
                      disabled:opacity-50 disabled:cursor-not-allowed
                      transition-all duration-200"
         />
@@ -41,7 +42,7 @@ export default function UrlInput({ onSubmit, disabled = false }: UrlInputProps) 
                      disabled:opacity-50 disabled:cursor-not-allowed
                      transition-all duration-200 whitespace-nowrap"
         >
-          <span className="mr-2">&#9889;</span>
+          <span className="mr-2 animate-[float_2s_ease-in-out_infinite]">&#9889;</span>
           Jack This Skill
         </button>
       </div>
