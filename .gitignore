@@ -6,9 +6,8 @@ dist
 *.tsbuildinfo
 logs/
 
-# Claude Code local settings
-.claude/settings.local.json
-.claude/data/
+# Claude Code local settings and tooling (not for public consumers)
+.claude/
 
 # OS files
 .DS_Store
@@ -16,6 +15,9 @@ Thumbs.db
 
 # Temp/test files
 *.tmp
+
+# npm pack artifacts
+*.tgz
 
 # IDE
 .vscode/

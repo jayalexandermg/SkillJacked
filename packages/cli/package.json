@@ -1,11 +1,13 @@
 {
   "name": "skilljacked",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "bin": {
-    "skilljacked": "./dist/index.mjs"
+    "skilljacked": "dist/index.mjs"
   },
   "main": "./dist/index.mjs",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup"
   },
