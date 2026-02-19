@@ -36,7 +36,8 @@ type AppState = 'idle' | 'loading' | 'preview' | 'error';
 
 export default function Home() {
   const [state, setState] = useState<AppState>('idle');
-  const [skillData, setSkillData] = useState<SkillData | null>(null);
+  const [skills, setSkills] = useState<SkillData[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [format, setFormat] = useState<Format>('claude-skill');
   const [errorMessage, setErrorMessage] = useState('');
   const [showAuth, setShowAuth] = useState(false);
@@ -60,22 +61,26 @@ export default function Home() {
   const handleSubmit = useCallback(async (url: string) => {
     setState('loading');
     setErrorMessage('');
+    setSelectedIndex(0);
 
     try {
       const data = await jackSkill(url, format);
-      setSkillData(data);
+      const skillList: SkillData[] = data.skills ?? [];
+      setSkills(skillList);
       setState('preview');
 
-      // Auto-save to localStorage
-      saveSkill({
-        id: `skill_${Date.now()}`,
-        name: data.skill.name,
-        sourceTitle: data.skill.sourceTitle,
-        sourceUrl: data.skill.sourceUrl,
-        generatedAt: data.skill.generatedAt,
-        content: data.formatted.content,
-        format: data.formatted.format,
-        filename: data.formatted.filename,
+      // Auto-save all skills to localStorage
+      skillList.forEach((s: SkillData, i: number) => {
+        saveSkill({
+          id: `skill_${Date.now()}_${i}`,
+          name: s.skill.name,
+          sourceTitle: s.skill.sourceTitle,
+          sourceUrl: s.skill.sourceUrl,
+          generatedAt: s.skill.generatedAt,
+          content: s.formatted.content,
+          format: s.formatted.format,
+          filename: s.formatted.filename,
+        });
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong.';
@@ -87,12 +92,12 @@ export default function Home() {
   const handleFormatChange = useCallback(async (newFormat: Format) => {
     setFormat(newFormat);
 
-    // If we already have skill data, re-fetch with new format
-    if (skillData) {
+    if (skills.length > 0) {
       setState('loading');
+      setSelectedIndex(0);
       try {
-        const data = await jackSkill(skillData.skill.sourceUrl, newFormat);
-        setSkillData(data);
+        const data = await jackSkill(skills[0].skill.sourceUrl, newFormat);
+        setSkills(data.skills ?? []);
         setState('preview');
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Format change failed.';
@@ -100,13 +105,16 @@ export default function Home() {
         setState('error');
       }
     }
-  }, [skillData]);
+  }, [skills]);
 
   const handleReset = useCallback(() => {
     setState('idle');
-    setSkillData(null);
+    setSkills([]);
+    setSelectedIndex(0);
     setErrorMessage('');
   }, []);
+
+  const activeSkill = skills[selectedIndex];
 
   return (
     <main className="min-h-screen">
@@ -136,6 +144,7 @@ export default function Home() {
             onSubmit={handleSubmit}
             disabled={state === 'loading'}
           />
+          <p className="text-text-tertiary text-xs text-center mt-2">No signup needed</p>
 
           {/* State machine rendering */}
           <div className="mt-10">
@@ -156,12 +165,31 @@ export default function Home() {
               </div>
             )}
 
-            {state === 'preview' && skillData && (
+            {state === 'preview' && activeSkill && (
               <div>
-                <SkillPreview content={skillData.formatted.content} />
+                {/* Skill tab switcher */}
+                {skills.length > 1 && (
+                  <div className="flex gap-2 mb-5 flex-wrap max-w-3xl mx-auto">
+                    {skills.map((s, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setSelectedIndex(i)}
+                        className={`px-3 py-1.5 text-xs font-mono rounded-md border transition-all duration-200 ${
+                          i === selectedIndex
+                            ? 'bg-accent text-primary border-accent'
+                            : 'border-border-subtle text-text-secondary hover:border-accent/50 hover:text-text-primary'
+                        }`}
+                      >
+                        {s.skill.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <SkillPreview content={activeSkill.formatted.content} />
                 <DownloadBar
-                  content={skillData.formatted.content}
-                  filename={skillData.formatted.filename}
+                  content={activeSkill.formatted.content}
+                  filename={activeSkill.formatted.filename}
                   format={format}
                   onFormatChange={handleFormatChange}
                 />
