@@ -1,0 +1,14 @@
+{
+  "session_id": "79ca8f89-ad76-48d4-86a1-82d5da9b7360",
+  "prompts": [
+    "how can i test it quick before pus",
+    "how can i test it quick before pus",
+    "can you make the 'jack this skill' button the same color as the gold headline par thte 'start doing'",
+    "its black to me. can you make sure its on the dev serer.. i need the button to be gold all the time. button should static matcht hestart doing and match the border .. ",
+    "still black you'remkaing the text gold.. the text needs to be black, the button needs to be gold",
+    "doesn't match the border..opactity is messed up",
+    "the button needs to be active for the demo.. the button needs to run the process with --multi --max 10 --debug",
+    "in the CLI its npx skilljacked ingest \"<youtube url>\" --multi --max 10 --debug but it needs to run that when button pressed and then go through th eprocess.. it does the process and hsows on screen while its happening and then the skills show up under for access and download... i hope theprocess is saved somewhere. this is for the UI not the cli",
+    "its not a new feature though.. whenever the waitlist was added it got repalced somehow.. can you check to see if its there somewhere still "
+  ]
+}
