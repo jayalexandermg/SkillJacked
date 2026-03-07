@@ -3,6 +3,7 @@ import { transform } from './transformer';
 import { format } from './formatter';
 import { OutputFormat, FormattedOutput } from './formatter/types';
 import { StructuredSkill } from './transformer/types';
+import type { ExtractionOptions } from './extractor/types';
 
 export interface SkillOutput {
   skill: StructuredSkill;
@@ -14,12 +15,13 @@ export interface JackOptions {
   apiKey?: string;
   maxRetries?: number;
   onRetry?: (msg: string) => void;
+  extraction?: ExtractionOptions;
 }
 
 export async function jackSkill(url: string, options: JackOptions = {}): Promise<SkillOutput> {
   const outputFormat = options.format ?? 'claude-skill';
 
-  const rawContent = await extract(url);
+  const rawContent = await extract(url, options.extraction);
   const retryOpts = options.maxRetries !== undefined || options.onRetry
     ? { maxRetries: options.maxRetries, onRetry: options.onRetry }
     : undefined;

@@ -84,7 +84,12 @@ export async function POST(request: NextRequest) {
     const result = await jackSkill(url, {
       format,
       apiKey,
+      extraction: {
+        onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
+      },
     });
+
+    console.log(`[/api/jack] Success: "${result.skill.name}" via ${result.skill.sourceUrl}`);
 
     return NextResponse.json({
       skill: {
