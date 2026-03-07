@@ -4,7 +4,7 @@ export default function Footer() {
       <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <span className="font-heading text-sm font-semibold text-text-primary">
-            SkillJack
+            SkillJacked
           </span>
           <span className="text-text-tertiary text-xs">
             Built with Claude Code

@@ -20,16 +20,23 @@ export default function UrlInput({ onSubmit, disabled = false }: UrlInputProps) 
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-2xl mx-auto">
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div
+        style={{
+          border: '1.5px solid #e0c866',
+          borderRadius: '14px',
+          overflow: 'hidden',
+          display: 'flex',
+        }}
+      >
         <input
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="Paste a YouTube URL..."
+          placeholder="Paste URL to get started"
           disabled={disabled}
-          className="flex-1 px-5 py-4 bg-surface border border-border-subtle rounded-lg
+          className="flex-1 px-5 py-4 bg-surface
                      text-text-primary placeholder:text-text-tertiary font-body text-base
-                     focus:outline-none focus:border-border-focus focus:gold-glow-subtle
+                     focus:outline-none
                      disabled:opacity-50 disabled:cursor-not-allowed
                      transition-all duration-200"
         />
@@ -37,7 +44,7 @@ export default function UrlInput({ onSubmit, disabled = false }: UrlInputProps) 
           type="submit"
           disabled={disabled || !url.trim()}
           className="px-6 py-4 bg-accent text-primary font-body font-semibold text-base
-                     rounded-lg hover:bg-accent-hover hover:gold-glow
+                     hover:bg-accent-hover hover:gold-glow
                      disabled:opacity-50 disabled:cursor-not-allowed
                      transition-all duration-200 whitespace-nowrap"
         >

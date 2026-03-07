@@ -38,7 +38,7 @@ export { generateSkillsFromPlan, type GenerateFromPlanResult, type SkippedSegmen
 export { writeSkillPack } from './transformer/write-skill-pack';
 export { normalizeTranscript } from './transformer/normalize-transcript';
 export { validateSkillMarkdown } from './transformer/validators/skill-md';
-export type { RawContent } from './extractor/types';
+export type { RawContent, ExtractionOptions } from './extractor/types';
 export type { StructuredSkill, SkillPlan, SkillSegment } from './transformer/types';
 export type { FormattedOutput, OutputFormat } from './formatter/types';
 export { SkillJackError, ExtractionError, TransformError, ValidationError, SegmenterParseError } from './utils/errors';

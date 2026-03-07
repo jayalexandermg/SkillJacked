@@ -79,7 +79,14 @@ export const ingestCommand = new Command('ingest')
         spinner.succeed('Transcript loaded from file');
       } else {
         spinner.start('Fetching transcript...');
-        rawContent = await extract(url);
+        rawContent = await extract(url, {
+          onDebug: opts.debug
+            ? (msg: string) => { spinner.info(chalk.dim(msg)); spinner.start('Fetching transcript...'); }
+            : undefined,
+        });
+        if (opts.debug && rawContent.transcriptMethod) {
+          spinner.info(chalk.dim(`Transcript method: ${rawContent.transcriptMethod}`));
+        }
         spinner.succeed(`Transcript fetched: ${rawContent.title}`);
       }
 
@@ -168,11 +175,20 @@ export const ingestCommand = new Command('ingest')
       console.log('');
       console.log(chalk.dim(`Output directory: ${result.baseDir}`));
     } catch (error) {
-      spinner.fail(
-        error instanceof SkillJackError
-          ? chalk.red(error.message)
-          : chalk.red(`Error: ${(error as Error).message}`),
-      );
+      const isExtractionError = error instanceof SkillJackError && error.code === 'VALIDATION_ERROR';
+      if (isExtractionError) {
+        spinner.fail(chalk.red('Couldn\'t detect a valid YouTube video ID.'));
+        console.error('');
+        console.error(chalk.dim('  Example:'));
+        console.error(chalk.dim('  skilljacked https://youtube.com/watch?v=abc123'));
+        console.error('');
+      } else {
+        spinner.fail(
+          error instanceof SkillJackError
+            ? chalk.red(error.message)
+            : chalk.red(`Error: ${(error as Error).message}`),
+        );
+      }
 
       if (opts.debug && error instanceof TransformError && error.details) {
         const d = error.details;

@@ -85,24 +85,15 @@ async function promptApiKey(): Promise<boolean> {
 }
 
 export function printQuickstart(): void {
-  console.log(chalk.bold('  Quick start:'));
   console.log('');
-  console.log(chalk.white('  skilljacked ingest "<url>"'));
-  console.log(chalk.dim('    Preview mode — generates top 3 skills'));
+  console.log(chalk.green('  Setup complete.'));
   console.log('');
-  console.log(chalk.white('  skilljacked ingest "<url>" --multi --max 10'));
-  console.log(chalk.dim('    Full extraction — up to 10 skills'));
+  console.log('  Paste a YouTube URL to extract skills.');
   console.log('');
-  console.log(chalk.white('  skilljacked ingest "<url>" --multi --max 20 --concurrency 1 --retries 4 --debug'));
-  console.log(chalk.dim('    Power mode — max extraction with debug output'));
+  console.log(chalk.bold('  Example:'));
+  console.log(chalk.white('  skilljacked https://youtube.com/watch?v=abc123'));
   console.log('');
-  console.log(chalk.white('  skilljacked ingest "<url>" --transcript-file ./transcript.txt --multi --max 10'));
-  console.log(chalk.dim('    Use a local transcript file'));
-  console.log('');
-  console.log(chalk.bold('  Config:'));
-  console.log(chalk.dim('  skilljacked config status       Show current config'));
-  console.log(chalk.dim('  skilljacked config unset-key    Remove saved API key'));
-  console.log(chalk.dim('  skilljacked config path         Show config file path'));
+  console.log(chalk.dim('  Run "skilljacked commands" to see all options.'));
   console.log('');
 }
 
@@ -117,10 +108,9 @@ export function printNonInteractiveHelp(): void {
   console.log('Get a key at: https://console.anthropic.com/');
   console.log('');
   console.log('Quick start:');
-  console.log('  skilljacked ingest "<url>"');
-  console.log('  skilljacked ingest "<url>" --multi --max 10');
+  console.log('  skilljacked https://youtube.com/watch?v=abc123');
   console.log('');
-  console.log('Run "skilljacked --help" for all options.');
+  console.log('Run "skilljacked commands" for all options.');
 }
 
 export async function runWizard(mode: 'full' | 'keyOnly' = 'full'): Promise<boolean> {
