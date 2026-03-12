@@ -1,4 +1,19 @@
-export async function jackSkill(url: string, format?: string) {
+export interface SkillData {
+  skill: {
+    name: string;
+    sourceTitle: string;
+    sourceUrl: string;
+    generatedAt: string;
+    content: string;
+  };
+  formatted: {
+    content: string;
+    filename: string;
+    format: string;
+  };
+}
+
+export async function jackSkills(url: string, format?: string): Promise<SkillData[]> {
   const res = await fetch('/api/jack', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -10,7 +25,8 @@ export async function jackSkill(url: string, format?: string) {
     throw new Error(error.error || `Request failed with status ${res.status}`);
   }
 
-  return res.json();
+  const data = await res.json();
+  return data.skills;
 }
 
 export async function signup(email: string) {

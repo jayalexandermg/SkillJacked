@@ -3,6 +3,8 @@ import { transform } from './transformer';
 import { format } from './formatter';
 import { OutputFormat, FormattedOutput } from './formatter/types';
 import { StructuredSkill } from './transformer/types';
+import { segmentTranscript } from './transformer/segmenter';
+import { generateSkillsFromPlan } from './transformer/skill-generator';
 import type { ExtractionOptions } from './extractor/types';
 
 export interface SkillOutput {
@@ -29,6 +31,48 @@ export async function jackSkill(url: string, options: JackOptions = {}): Promise
   const formatted = format(skill, outputFormat);
 
   return { skill, formatted };
+}
+
+export interface JackSkillsOptions extends JackOptions {
+  count?: number;
+  concurrency?: number;
+  onSkip?: (msg: string) => void;
+}
+
+export async function jackSkills(url: string, options: JackSkillsOptions = {}): Promise<SkillOutput[]> {
+  const { count = 10, concurrency = 3, onSkip, ...baseOptions } = options;
+  const outputFormat = baseOptions.format ?? 'claude-skill';
+
+  const rawContent = await extract(url, baseOptions.extraction);
+
+  const plan = await segmentTranscript(
+    {
+      title: rawContent.title,
+      sourceUrl: rawContent.sourceUrl,
+      duration: rawContent.duration,
+      transcript: rawContent.transcript,
+    },
+    {
+      maxSegments: count,
+      apiKey: baseOptions.apiKey,
+      maxRetries: baseOptions.maxRetries,
+      onRetry: baseOptions.onRetry,
+    },
+  );
+
+  const result = await generateSkillsFromPlan(rawContent, plan, {
+    apiKey: baseOptions.apiKey,
+    count,
+    concurrency,
+    maxRetries: baseOptions.maxRetries,
+    onRetry: baseOptions.onRetry,
+    onSkip,
+  });
+
+  return result.skills.map((skill) => ({
+    skill,
+    formatted: format(skill, outputFormat),
+  }));
 }
 
 export { extract } from './extractor';

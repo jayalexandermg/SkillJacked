@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jackSkill, SkillJackError } from '@skilljack/core';
+import { jackSkills, SkillJackError } from '@skilljack/core';
 import type { OutputFormat } from '@skilljack/core';
 
 // --- Fix 1: In-memory rate limiter ---
@@ -81,29 +81,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await jackSkill(url, {
+    const results = await jackSkills(url, {
       format,
       apiKey,
+      count: 10,
+      concurrency: 3,
       extraction: {
         onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
       },
+      onSkip: (msg) => console.log(`[/api/jack] ${msg}`),
     });
 
-    console.log(`[/api/jack] Success: "${result.skill.name}" via ${result.skill.sourceUrl}`);
+    console.log(`[/api/jack] Success: ${results.length} skills from ${url}`);
 
     return NextResponse.json({
-      skill: {
-        name: result.skill.name,
-        sourceTitle: result.skill.sourceTitle,
-        sourceUrl: result.skill.sourceUrl,
-        generatedAt: result.skill.generatedAt,
-        content: result.skill.content,
-      },
-      formatted: {
-        content: result.formatted.content,
-        filename: result.formatted.filename,
-        format: result.formatted.format,
-      },
+      skills: results.map((r) => ({
+        skill: {
+          name: r.skill.name,
+          sourceTitle: r.skill.sourceTitle,
+          sourceUrl: r.skill.sourceUrl,
+          generatedAt: r.skill.generatedAt,
+          content: r.skill.content,
+        },
+        formatted: {
+          content: r.formatted.content,
+          filename: r.formatted.filename,
+          format: r.formatted.format,
+        },
+      })),
     });
   } catch (err: unknown) {
     // --- Fix 7: Only expose SkillJackError messages, sanitize the rest ---
