@@ -74,7 +74,7 @@ export async function extractYouTube(
       duration: typeof s.duration === 'number' ? s.duration : 0,
     }));
 
-    let text = segments.map((s) => s.text).join(' ');
+    let text = segments.map((s) => s.text).join('\n');
     const words = text.split(/\s+/);
 
     if (words.length < MIN_TRANSCRIPT_WORDS) {
