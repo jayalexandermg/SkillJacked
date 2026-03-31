@@ -28,18 +28,3 @@ export async function jackSkills(url: string, format?: string): Promise<SkillDat
   const data = await res.json();
   return data.skills;
 }
-
-export async function signup(email: string) {
-  const res = await fetch('/api/auth', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
-  });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `Signup failed with status ${res.status}`);
-  }
-
-  return res.json();
-}

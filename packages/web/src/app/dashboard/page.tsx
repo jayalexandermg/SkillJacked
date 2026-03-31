@@ -1,40 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { isAuthenticated } from '@/lib/auth';
+import { UserButton } from '@clerk/nextjs';
 import { getSkills, deleteSkill, StoredSkill } from '@/lib/storage';
 import SkillCard from '@/components/skill-card';
-import AuthModal from '@/components/auth-modal';
-import { signup } from '@/lib/api-client';
-import { setToken } from '@/lib/auth';
 import Footer from '@/components/footer';
 
 export default function DashboardPage() {
   const [skills, setSkills] = useState<StoredSkill[]>([]);
-  const [authed, setAuthed] = useState(false);
-  const [showAuth, setShowAuth] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    setAuthed(isAuthenticated());
     setSkills(getSkills());
   }, []);
 
   const handleDelete = (id: string) => {
     deleteSkill(id);
     setSkills(getSkills());
-  };
-
-  const handleAuth = async (email: string) => {
-    try {
-      const res = await signup(email);
-      setToken(res.token);
-      setAuthed(true);
-      setShowAuth(false);
-    } catch {
-      // silent fail for MVP
-    }
   };
 
   if (!mounted) {
@@ -60,16 +43,7 @@ export default function DashboardPage() {
               </h1>
             </div>
 
-            {!authed && (
-              <button
-                onClick={() => setShowAuth(true)}
-                className="px-5 py-2.5 bg-accent text-primary font-body font-semibold text-sm
-                           rounded-lg hover:bg-accent-hover hover:gold-glow
-                           transition-all duration-200"
-              >
-                Sign Up to Save
-              </button>
-            )}
+            <UserButton  />
           </div>
 
           {/* Skills grid */}
@@ -117,12 +91,6 @@ export default function DashboardPage() {
       </section>
 
       <Footer />
-
-      <AuthModal
-        open={showAuth}
-        onClose={() => setShowAuth(false)}
-        onSubmit={handleAuth}
-      />
     </main>
   );
 }

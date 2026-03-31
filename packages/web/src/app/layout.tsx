@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ClerkProvider } from '@clerk/nextjs';
 import { Syne, DM_Sans, JetBrains_Mono } from 'next/font/google';
 import '@/styles/globals.css';
 
@@ -68,10 +69,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${syne.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}>
-      <body className="bg-primary text-text-primary font-body min-h-screen">
-        {children}
-      </body>
-    </html>
+    <ClerkProvider
+      appearance={{
+        variables: {
+          colorPrimary: '#e0c866',
+          colorBackground: '#141419',
+          colorInputBackground: '#0a0a0f',
+          colorInputText: '#f8fafc',
+          colorText: '#f8fafc',
+          colorTextSecondary: '#8a8a9a',
+          borderRadius: '0.5rem',
+        },
+      }}
+    >
+      <html lang="en" className={`${syne.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}>
+        <body className="bg-primary text-text-primary font-body min-h-screen">
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
