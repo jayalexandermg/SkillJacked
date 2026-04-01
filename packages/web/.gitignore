@@ -1,5 +1,5 @@
 .vercel
-skills/
+/skills/
 .env
 # Env / Secrets
 .env
@@ -38,7 +38,7 @@ Thumbs.db
 .vercel/
 
 # Generated Output (SkillJacked)
-skills/
+/skills/
 
 # Temporary files
 *.tmp

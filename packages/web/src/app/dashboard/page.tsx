@@ -1,26 +1,51 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { UserButton } from '@clerk/nextjs';
-import { getSkills, deleteSkill, StoredSkill } from '@/lib/storage';
 import SkillCard from '@/components/skill-card';
 import Footer from '@/components/footer';
 
-export default function DashboardPage() {
-  const [skills, setSkills] = useState<StoredSkill[]>([]);
-  const [mounted, setMounted] = useState(false);
+interface DbSkill {
+  id: string;
+  name: string;
+  slug: string;
+  content: string;
+  source_title: string | null;
+  source_url: string | null;
+  format: string;
+  created_at: string;
+}
 
-  useEffect(() => {
-    setMounted(true);
-    setSkills(getSkills());
+export default function DashboardPage() {
+  const [skills, setSkills] = useState<DbSkill[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchSkills = useCallback(async () => {
+    try {
+      const res = await fetch('/api/skills');
+      if (res.ok) {
+        const data = await res.json();
+        setSkills(data.skills ?? []);
+      }
+    } catch {
+      // silent fail
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handleDelete = (id: string) => {
-    deleteSkill(id);
-    setSkills(getSkills());
+  useEffect(() => {
+    fetchSkills();
+  }, [fetchSkills]);
+
+  const handleDelete = async (id: string) => {
+    const res = await fetch(`/api/skills/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setSkills((prev) => prev.filter((s) => s.id !== id));
+    }
   };
 
-  if (!mounted) {
+  if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <div className="text-text-secondary">Loading...</div>
@@ -43,7 +68,7 @@ export default function DashboardPage() {
               </h1>
             </div>
 
-            <UserButton  />
+            <UserButton />
           </div>
 
           {/* Skills grid */}
@@ -54,11 +79,11 @@ export default function DashboardPage() {
                   key={skill.id}
                   id={skill.id}
                   name={skill.name}
-                  sourceTitle={skill.sourceTitle}
-                  generatedAt={skill.generatedAt}
+                  sourceTitle={skill.source_title ?? ''}
+                  generatedAt={skill.created_at}
                   format={skill.format}
                   content={skill.content}
-                  filename={skill.filename}
+                  filename={`${skill.slug}.md`}
                   onDelete={handleDelete}
                 />
               ))}
@@ -80,11 +105,11 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Coming Soon teaser */}
+          {/* Cloud sync badge */}
           <div className="mt-16 p-6 bg-surface border border-border-subtle rounded-lg text-center">
             <p className="text-text-secondary text-sm">
-              Cloud sync, skill sharing, and team libraries are{' '}
-              <span className="text-accent font-medium">coming soon</span>.
+              Your skills are <span className="text-accent font-medium">synced to the cloud</span>.
+              Access them from any device.
             </p>
           </div>
         </div>

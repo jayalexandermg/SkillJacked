@@ -10,10 +10,12 @@
   "dependencies": {
     "@clerk/nextjs": "^6.39.1",
     "@skilljack/core": "workspace:*",
+    "@supabase/supabase-js": "^2.101.1",
     "@vercel/kv": "^2.0.0",
     "next": "^16.1.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "svix": "^1.89.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

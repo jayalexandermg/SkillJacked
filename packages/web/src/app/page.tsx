@@ -36,19 +36,36 @@ export default function Home() {
       setActiveSkillIndex(0);
       setState('preview');
 
-      // Auto-save all skills to localStorage
-      data.forEach((item, i) => {
-        saveSkill({
-          id: `skill_${Date.now()}_${i}`,
-          name: item.skill.name,
-          sourceTitle: item.skill.sourceTitle,
-          sourceUrl: item.skill.sourceUrl,
-          generatedAt: item.skill.generatedAt,
-          content: item.formatted.content,
-          format: item.formatted.format,
-          filename: item.formatted.filename,
+      // Save skills: Supabase for signed-in users, localStorage as fallback
+      if (isSignedIn) {
+        fetch('/api/skills', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            skills: data.map((item) => ({
+              name: item.skill.name,
+              slug: item.formatted.filename.replace(/\.[^.]+$/, ''),
+              content: item.formatted.content,
+              source_title: item.skill.sourceTitle,
+              source_url: item.skill.sourceUrl,
+              format: item.formatted.format,
+            })),
+          }),
+        }).catch(() => {});
+      } else {
+        data.forEach((item, i) => {
+          saveSkill({
+            id: `skill_${Date.now()}_${i}`,
+            name: item.skill.name,
+            sourceTitle: item.skill.sourceTitle,
+            sourceUrl: item.skill.sourceUrl,
+            generatedAt: item.skill.generatedAt,
+            content: item.formatted.content,
+            format: item.formatted.format,
+            filename: item.formatted.filename,
+          });
         });
-      });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong.';
       setErrorMessage(message);
