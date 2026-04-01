@@ -13,11 +13,11 @@ export interface SkillData {
   };
 }
 
-export async function jackSkills(url: string, format?: string): Promise<SkillData[]> {
+export async function jackSkills(url: string): Promise<SkillData[]> {
   const res = await fetch('/api/jack', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, format }),
+    body: JSON.stringify({ url, format: 'claude-skill' }),
   });
 
   if (!res.ok) {

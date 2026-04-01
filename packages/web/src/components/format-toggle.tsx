@@ -1,6 +1,6 @@
 'use client';
 
-type Format = 'claude-skill' | 'cursor-rules' | 'windsurf-rules';
+import type { Format } from '@/lib/client-formatter';
 
 interface FormatToggleProps {
   selected: Format;
@@ -8,7 +8,7 @@ interface FormatToggleProps {
 }
 
 const formats: { value: Format; label: string }[] = [
-  { value: 'claude-skill', label: 'Claude Code' },
+  { value: 'claw-skill', label: 'Claw Skill' },
   { value: 'cursor-rules', label: 'Cursor' },
   { value: 'windsurf-rules', label: 'Windsurf' },
 ];

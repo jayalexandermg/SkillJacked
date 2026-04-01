@@ -1,15 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-
-type Format = 'claude-skill' | 'cursor-rules' | 'windsurf-rules';
+import type { Format } from '@/lib/client-formatter';
 
 interface InstallGuideProps {
   format: Format;
 }
 
 const instructions: Record<Format, { title: string; steps: string[] }> = {
-  'claude-skill': {
+  'claw-skill': {
     title: 'Install for Claude Code',
     steps: [
       'Download the .md skill file.',
