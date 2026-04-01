@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import FormatToggle from './format-toggle';
-
-type Format = 'claude-skill' | 'cursor-rules' | 'windsurf-rules';
+import type { Format } from '@/lib/client-formatter';
 
 interface DownloadBarProps {
   content: string;
   filename: string;
   format: Format;
   onFormatChange: (format: Format) => void;
+  hideActions?: boolean;
 }
 
 export default function DownloadBar({
@@ -17,6 +17,7 @@ export default function DownloadBar({
   filename,
   format,
   onFormatChange,
+  hideActions,
 }: DownloadBarProps) {
   const [copied, setCopied] = useState(false);
 
@@ -55,25 +56,27 @@ export default function DownloadBar({
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-surface border border-border-subtle rounded-lg">
         <FormatToggle selected={format} onChange={onFormatChange} />
 
-        <div className="flex gap-3">
-          <button
-            onClick={handleCopy}
-            className="px-5 py-2.5 border border-border-subtle text-text-primary font-body font-medium
-                       text-sm rounded-lg hover:border-border-focus hover:gold-glow-subtle
-                       transition-all duration-200"
-          >
-            {copied ? 'Copied!' : 'Copy to Clipboard'}
-          </button>
+        {!hideActions && (
+          <div className="flex gap-3">
+            <button
+              onClick={handleCopy}
+              className="px-5 py-2.5 border border-border-subtle text-text-primary font-body font-medium
+                         text-sm rounded-lg hover:border-border-focus hover:gold-glow-subtle
+                         transition-all duration-200"
+            >
+              {copied ? 'Copied!' : 'Copy to Clipboard'}
+            </button>
 
-          <button
-            onClick={handleDownload}
-            className="px-5 py-2.5 bg-accent text-primary font-body font-semibold text-sm
-                       rounded-lg hover:bg-accent-hover hover:gold-glow
-                       transition-all duration-200"
-          >
-            Download File
-          </button>
-        </div>
+            <button
+              onClick={handleDownload}
+              className="px-5 py-2.5 bg-accent text-primary font-body font-semibold text-sm
+                         rounded-lg hover:bg-accent-hover hover:gold-glow
+                         transition-all duration-200"
+            >
+              Download File
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

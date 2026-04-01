@@ -14,7 +14,8 @@ interface SkillCardProps {
 }
 
 const formatLabels: Record<string, string> = {
-  'claude-skill': 'Claude',
+  'claw-skill': 'Claw',
+  'claude-skill': 'Claw', // legacy compat
   'cursor-rules': 'Cursor',
   'windsurf-rules': 'Windsurf',
 };
