@@ -14,12 +14,7 @@ import Footer from '@/components/footer';
 import { jackSkills, type SkillData } from '@/lib/api-client';
 import { saveSkill } from '@/lib/storage';
 import { formatSkill, type Format } from '@/lib/client-formatter';
-import {
-  isAtExtractionLimit,
-  recordExtraction,
-  getRemainingExtractions,
-  FREE_EXTRACTION_LIMIT,
-} from '@/lib/usage-tracker';
+import { FREE_EXTRACTION_LIMIT } from '@/lib/usage-tracker';
 
 const SESSION_KEY = 'skilljack_extraction';
 
@@ -33,6 +28,9 @@ export default function Home() {
   const [format, setFormat] = useState<Format>('claude-skill');
   const [errorMessage, setErrorMessage] = useState('');
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [usage, setUsage] = useState<{ used: number; limit: number; tier: string; remaining: number } | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [upgradeBanner, setUpgradeBanner] = useState(false);
   const restoredRef = useRef(false);
 
   // Restore extraction from sessionStorage on mount (handles nav away + back, and post-signup restore)
@@ -50,6 +48,38 @@ export default function Home() {
       }
     } catch {}
   }, []);
+
+  // Fetch server-side usage when signed in
+  const fetchUsage = useCallback(async () => {
+    try {
+      const res = await fetch('/api/usage');
+      if (res.ok) {
+        const data = await res.json();
+        setUsage(data);
+      }
+    } catch {
+      // silent fail — nav will just not show counter
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isSignedIn) {
+      fetchUsage();
+    }
+  }, [isSignedIn, fetchUsage]);
+
+  // Handle ?upgraded=1 query param (post-Stripe checkout redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('upgraded') === '1') {
+      setUpgradeBanner(true);
+      window.history.replaceState({}, '', '/');
+      // Re-fetch usage to reflect new Pro tier
+      if (isSignedIn) fetchUsage();
+      const timer = setTimeout(() => setUpgradeBanner(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [isSignedIn, fetchUsage]);
 
   // When user signs in after extracting anonymously, auto-save to Supabase
   useEffect(() => {
@@ -89,7 +119,7 @@ export default function Home() {
   }, [rawSkills, format]);
 
   const handleSubmit = useCallback(async (url: string) => {
-    if (isSignedIn && isAtExtractionLimit()) {
+    if (isSignedIn && usage?.tier !== 'pro' && usage?.remaining === 0) {
       setShowLimitModal(true);
       return;
     }
@@ -107,8 +137,7 @@ export default function Home() {
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
 
       if (isSignedIn) {
-        recordExtraction();
-        // Save to Supabase
+        // Save to Supabase (backend handles usage increment)
         fetch('/api/skills', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -125,6 +154,9 @@ export default function Home() {
         })
           .then((res) => { if (!res.ok) console.error('[save] Failed:', res.status); })
           .catch((err) => console.error('[save] Error:', err));
+
+        // Re-fetch usage to update counter
+        fetchUsage();
       } else {
         // localStorage fallback for anon users
         data.forEach((item, i) => {
@@ -145,7 +177,7 @@ export default function Home() {
       setErrorMessage(message);
       setState('error');
     }
-  }, [isSignedIn]);
+  }, [isSignedIn, usage, fetchUsage]);
 
   // Format change is now instant -- no API call, just update format state
   const handleFormatChange = useCallback((newFormat: Format) => {
@@ -173,16 +205,31 @@ export default function Home() {
 
   return (
     <main className="min-h-screen">
+      {/* Upgrade success banner */}
+      {upgradeBanner && (
+        <div className="bg-success/20 border-b border-success/40 px-6 py-3 text-center">
+          <p className="text-success text-sm font-medium">
+            Welcome to Pro! You now have 50 extractions/month.
+          </p>
+        </div>
+      )}
+
       {/* Top bar */}
       <nav className="flex items-center justify-between px-6 pt-6 max-w-5xl mx-auto">
         <a href="/dashboard" className="text-text-secondary hover:text-text-primary text-sm transition-colors">
           My Skills
         </a>
         <div className="flex items-center gap-4">
-          {isSignedIn && (
-            <span className="text-text-tertiary text-xs font-mono">
-              {getRemainingExtractions()}/{FREE_EXTRACTION_LIMIT} extractions left
-            </span>
+          {isSignedIn && usage && (
+            usage.tier === 'pro' ? (
+              <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-accent/20 text-accent">
+                Pro
+              </span>
+            ) : (
+              <span className="text-text-tertiary text-xs font-mono">
+                {usage.remaining}/{usage.limit} extractions left
+              </span>
+            )
           )}
           {isSignedIn ? (
             <UserButton />
@@ -218,16 +265,33 @@ export default function Home() {
                   Monthly Limit Reached
                 </h3>
                 <p className="text-text-secondary text-sm mb-6">
-                  You&apos;ve used all {FREE_EXTRACTION_LIMIT} free extractions this month.
-                  Upgrade for unlimited extractions.
+                  You&apos;ve used all {usage?.limit ?? FREE_EXTRACTION_LIMIT} free extractions this month.
+                  Upgrade to Pro for 50 extractions/month.
                 </p>
                 <div className="flex flex-col gap-3">
                   <button
-                    className="px-6 py-3 bg-accent text-primary font-body font-semibold text-sm
-                               rounded-lg opacity-60 cursor-not-allowed"
-                    disabled
+                    onClick={async () => {
+                      setCheckoutLoading(true);
+                      try {
+                        const res = await fetch('/api/checkout', { method: 'POST' });
+                        if (res.ok) {
+                          const { url } = await res.json();
+                          window.location.href = url;
+                        } else {
+                          console.error('[checkout] Failed:', res.status);
+                          setCheckoutLoading(false);
+                        }
+                      } catch (err) {
+                        console.error('[checkout] Error:', err);
+                        setCheckoutLoading(false);
+                      }
+                    }}
+                    disabled={checkoutLoading}
+                    className={`px-6 py-3 bg-accent text-primary font-body font-semibold text-sm
+                               rounded-lg hover:bg-accent-hover hover:gold-glow
+                               transition-all duration-200 ${checkoutLoading ? 'opacity-60 cursor-wait' : ''}`}
                   >
-                    Upgrade (Coming Soon)
+                    {checkoutLoading ? 'Redirecting...' : 'Upgrade to Pro'}
                   </button>
                   <button
                     onClick={() => setShowLimitModal(false)}

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jackSkills, SkillJackError } from '@skilljack/core';
 import type { OutputFormat } from '@skilljack/core';
+import { auth } from '@clerk/nextjs/server';
+import { getSupabase } from '@/lib/supabase';
 
 // --- Fix 1: In-memory rate limiter ---
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -72,6 +74,73 @@ export async function POST(request: NextRequest) {
       ? (rawFormat as OutputFormat)
       : 'claude-skill';
 
+    // --- Usage enforcement for signed-in users ---
+    const { userId } = await auth();
+    let supabaseUserId: string | null = null;
+
+    if (userId) {
+      const supabase = getSupabase();
+      const now = new Date();
+      const periodStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1
+      ).toISOString();
+
+      const { data: user } = await supabase
+        .from('users')
+        .select('id, tier')
+        .eq('clerk_id', userId)
+        .single();
+
+      if (user) {
+        supabaseUserId = user.id;
+        const tier = user.tier || 'free';
+        const limit = tier === 'pro' ? 50 : 3;
+
+        // Find or create usage record for current month
+        let { data: usage } = await supabase
+          .from('usage')
+          .select('jacks_used, jacks_limit')
+          .eq('user_id', user.id)
+          .eq('period_start', periodStart)
+          .single();
+
+        if (!usage) {
+          const periodEnd = new Date(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            1
+          ).toISOString();
+
+          const { data: created } = await supabase
+            .from('usage')
+            .insert({
+              user_id: user.id,
+              jacks_used: 0,
+              jacks_limit: limit,
+              period_start: periodStart,
+              period_end: periodEnd,
+            })
+            .select('jacks_used, jacks_limit')
+            .single();
+
+          usage = created;
+        }
+
+        if (usage && usage.jacks_used >= usage.jacks_limit) {
+          return NextResponse.json(
+            {
+              error:
+                'Monthly extraction limit reached. Upgrade to Pro for more.',
+              upgrade: true,
+            },
+            { status: 402 }
+          );
+        }
+      }
+    }
+
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       console.error('[/api/jack] Missing ANTHROPIC_API_KEY');
@@ -93,6 +162,37 @@ export async function POST(request: NextRequest) {
     });
 
     console.log(`[/api/jack] Success: ${results.length} skills from ${url}`);
+
+    // --- Increment usage after successful extraction ---
+    if (userId && supabaseUserId) {
+      try {
+        const supabase = getSupabase();
+        const now = new Date();
+        const periodStart = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          1
+        ).toISOString();
+
+        // Read current usage then increment
+        const { data: currentUsage } = await supabase
+          .from('usage')
+          .select('id, jacks_used')
+          .eq('user_id', supabaseUserId)
+          .eq('period_start', periodStart)
+          .single();
+
+        if (currentUsage) {
+          await supabase
+            .from('usage')
+            .update({ jacks_used: currentUsage.jacks_used + 1 })
+            .eq('id', currentUsage.id);
+        }
+      } catch (usageErr) {
+        // Log but don't fail the request — the extraction already succeeded
+        console.error('[/api/jack] Failed to increment usage:', usageErr);
+      }
+    }
 
     return NextResponse.json({
       skills: results.map((r) => ({
