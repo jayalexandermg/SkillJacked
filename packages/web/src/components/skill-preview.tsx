@@ -13,7 +13,7 @@ export default function SkillPreview({ content }: SkillPreviewProps) {
           <div className="w-3 h-3 rounded-full bg-error opacity-60" />
           <div className="w-3 h-3 rounded-full bg-accent opacity-60" />
           <div className="w-3 h-3 rounded-full bg-success opacity-60" />
-          <span className="ml-3 text-text-tertiary text-xs font-mono">skill-preview</span>
+          <span className="ml-3 text-text-tertiary text-xs font-mono">skill.md</span>
         </div>
 
         {/* Content */}

@@ -8,7 +8,7 @@ interface FormatToggleProps {
 }
 
 const formats: { value: Format; label: string }[] = [
-  { value: 'claw-skill', label: 'Claw Skill' },
+  { value: 'claude-skill', label: 'Claude Skill' },
   { value: 'cursor-rules', label: 'Cursor' },
   { value: 'windsurf-rules', label: 'Windsurf' },
 ];

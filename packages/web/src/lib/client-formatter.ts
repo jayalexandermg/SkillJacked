@@ -2,12 +2,12 @@
  * Client-side formatter that replicates the core formatter logic.
  * This avoids re-fetching from the API when the user switches formats.
  *
- * The raw skill content (from skill.content) is in claude-skill / claw-skill
+ * The raw skill content (from skill.content) is in claude-skill / claude-skill
  * format (markdown with frontmatter). Other formats strip frontmatter and
  * add their own header.
  */
 
-export type Format = 'claw-skill' | 'cursor-rules' | 'windsurf-rules';
+export type Format = 'claude-skill' | 'cursor-rules' | 'windsurf-rules';
 
 export interface FormattedSkill {
   content: string;
@@ -34,11 +34,11 @@ export function formatSkill(
   format: Format,
 ): FormattedSkill {
   switch (format) {
-    case 'claw-skill':
+    case 'claude-skill':
       return {
         content: rawContent,
         filename: `${name}.md`,
-        format: 'claw-skill',
+        format: 'claude-skill',
       };
 
     case 'cursor-rules': {
@@ -65,7 +65,7 @@ export function formatSkill(
       return {
         content: rawContent,
         filename: `${name}.md`,
-        format: 'claw-skill',
+        format: 'claude-skill',
       };
   }
 }

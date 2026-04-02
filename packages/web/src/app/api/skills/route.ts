@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     source_title: s.source_title ?? null,
     source_url: s.source_url ?? null,
     source_video_id: s.source_video_id ?? null,
-    format: s.format ?? 'claw-skill',
+    format: s.format ?? 'claude-skill',
   }));
 
   const { data, error } = await getSupabase()
