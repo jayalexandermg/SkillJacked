@@ -8,7 +8,7 @@ interface InstallGuideProps {
 }
 
 const instructions: Record<Format, { title: string; steps: string[] }> = {
-  'claw-skill': {
+  'claude-skill': {
     title: 'Install for Claude Code',
     steps: [
       'Download the .md skill file.',

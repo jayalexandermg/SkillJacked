@@ -78,7 +78,38 @@ export default function RootLayout({
           colorInputText: '#f8fafc',
           colorText: '#f8fafc',
           colorTextSecondary: '#8a8a9a',
+          colorNeutral: '#f8fafc',
+          colorTextOnPrimaryBackground: '#0a0a0f',
           borderRadius: '0.5rem',
+        },
+        elements: {
+          socialButtonsBlockButton: {
+            backgroundColor: '#1e1e26',
+            color: '#f8fafc',
+            borderColor: '#2a2a35',
+          },
+          socialButtonsBlockButtonText: {
+            color: '#f8fafc',
+          },
+          userButtonPopoverCard: {
+            backgroundColor: '#141419',
+            borderColor: '#2a2a35',
+          },
+          userButtonPopoverActionButton: {
+            color: '#f8fafc',
+          },
+          userButtonPopoverActionButtonText: {
+            color: '#f8fafc',
+          },
+          userButtonPopoverActionButtonIcon: {
+            color: '#8a8a9a',
+          },
+          userButtonPopoverFooter: {
+            display: 'none',
+          },
+          formButtonPrimary: {
+            color: '#0a0a0f',
+          },
         },
       }}
     >
