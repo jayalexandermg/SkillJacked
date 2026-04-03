@@ -180,6 +180,14 @@ export default function Home() {
   const fullSkillsCount = rawSkills.length;
   const activeDisplaySkill =
     displaySkills[Math.min(activeSkillIndex, Math.max(displaySkills.length - 1, 0))] ?? null;
+  const gatedOverlayMessage =
+    !signedIn && activeDisplaySkill
+      ? activeDisplaySkill.tier === 'partial'
+        ? `Sign up free to see the full skill and unlock all ${fullSkillsCount}`
+        : activeDisplaySkill.tier === 'locked'
+          ? `Sign up free to unlock all ${fullSkillsCount} skills`
+          : null
+      : null;
 
   const handleSubmit = useCallback(async (url: string) => {
     if (signedIn && usage?.tier !== 'pro' && usage?.remaining === 0) {
@@ -476,35 +484,24 @@ export default function Home() {
                   sourceUrl={activeDisplaySkill.raw.skill.sourceUrl}
                   formatLabel={formatLabels[format]}
                   filename={activeDisplaySkill.formatted.filename}
+                  overlay={gatedOverlayMessage ? (
+                    <>
+                      <p className="text-text-primary font-heading font-semibold text-lg leading-7">
+                        {gatedOverlayMessage}
+                      </p>
+                      <div className="mt-4 flex justify-center">
+                        <SignInButton mode="modal">
+                          <button className="px-5 py-2.5 bg-accent text-primary font-body font-semibold text-sm rounded-lg hover:bg-accent-hover hover:gold-glow transition-all duration-200">
+                            Sign Up Free
+                          </button>
+                        </SignInButton>
+                      </div>
+                    </>
+                  ) : null}
                   previewMode={activeDisplaySkill.tier}
                 />
 
-                {activeDisplaySkill.tier === 'locked' ? (
-                  <div className="w-full max-w-3xl mx-auto mt-6 p-6 bg-surface border border-accent/30 rounded-lg text-center">
-                    <p className="text-text-primary font-heading font-semibold text-lg mb-2">
-                      Sign up free to see all {fullSkillsCount} skills
-                    </p>
-                    <p className="text-text-secondary text-sm mb-4">
-                      Full access to every skill, plus download and copy.
-                    </p>
-                    <SignInButton mode="modal">
-                      <button className="px-6 py-3 bg-accent text-primary font-body font-semibold text-sm rounded-lg hover:bg-accent-hover hover:gold-glow transition-all duration-200">
-                        Sign Up Free
-                      </button>
-                    </SignInButton>
-                  </div>
-                ) : activeDisplaySkill.tier === 'partial' ? (
-                  <div className="w-full max-w-3xl mx-auto mt-6 p-4 bg-surface border border-border-subtle rounded-lg text-center">
-                    <p className="text-text-secondary text-sm mb-3">
-                      Sign up to see the full skill and unlock all {fullSkillsCount}
-                    </p>
-                    <SignInButton mode="modal">
-                      <button className="px-5 py-2.5 bg-accent text-primary font-body font-semibold text-sm rounded-lg hover:bg-accent-hover hover:gold-glow transition-all duration-200">
-                        Sign Up Free
-                      </button>
-                    </SignInButton>
-                  </div>
-                ) : (
+                {activeDisplaySkill.tier === 'full' ? (
                   <>
                     <DownloadBar
                       content={activeDisplaySkill.formatted.content}
@@ -527,7 +524,7 @@ export default function Home() {
                       </div>
                     )}
                   </>
-                )}
+                ) : null}
 
                 <div className="text-center mt-8">
                   <button

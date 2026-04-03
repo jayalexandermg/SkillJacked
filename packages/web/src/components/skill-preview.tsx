@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 interface SkillPreviewProps {
   content: string;
   name: string;
@@ -6,6 +8,7 @@ interface SkillPreviewProps {
   sourceUrl: string;
   formatLabel: string;
   filename: string;
+  overlay?: ReactNode;
   previewMode?: 'full' | 'partial' | 'locked';
 }
 
@@ -47,6 +50,7 @@ export default function SkillPreview({
   sourceUrl,
   formatLabel,
   filename,
+  overlay,
   previewMode = 'full',
 }: SkillPreviewProps) {
   const lines = content.split('\n');
@@ -111,7 +115,7 @@ export default function SkillPreview({
         </div>
       </div>
 
-      <div className="bg-code-bg border border-border-subtle rounded-lg overflow-hidden">
+      <div className="relative bg-code-bg border border-border-subtle rounded-lg overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
           <div className="w-3 h-3 rounded-full bg-error opacity-60" />
           <div className="w-3 h-3 rounded-full bg-accent opacity-60" />
@@ -143,6 +147,14 @@ export default function SkillPreview({
             </pre>
           )}
         </div>
+
+        {overlay && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center p-4 sm:p-6">
+            <div className="w-full max-w-sm rounded-xl border border-accent/30 bg-surface/95 px-4 py-5 text-center shadow-xl backdrop-blur-sm sm:px-6 sm:py-6">
+              {overlay}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
