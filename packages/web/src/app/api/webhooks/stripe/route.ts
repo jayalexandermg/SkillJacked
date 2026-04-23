@@ -86,6 +86,68 @@ export async function POST(request: NextRequest) {
         break;
       }
 
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object as Stripe.Subscription;
+        const customerId =
+          typeof subscription.customer === 'string'
+            ? subscription.customer
+            : subscription.customer?.id;
+
+        if (!customerId) break;
+
+        const { data: user } = await supabase
+          .from('users')
+          .select('id')
+          .eq('stripe_customer_id', customerId)
+          .single();
+
+        if (!user) {
+          console.error(
+            '[stripe-webhook] No user for customer:',
+            customerId
+          );
+          break;
+        }
+
+        const isActive =
+          subscription.status === 'active' ||
+          subscription.status === 'trialing';
+        const nextTier = isActive ? 'pro' : 'free';
+        const nextLimit = isActive ? 50 : 3;
+
+        await supabase
+          .from('users')
+          .update({ tier: nextTier, updated_at: new Date().toISOString() })
+          .eq('id', user.id);
+
+        const now = new Date();
+        const periodStart = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          1
+        ).toISOString();
+        const periodEnd = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          1
+        ).toISOString();
+
+        await supabase.from('usage').upsert(
+          {
+            user_id: user.id,
+            jacks_limit: nextLimit,
+            period_start: periodStart,
+            period_end: periodEnd,
+          },
+          { onConflict: 'user_id,period_start' }
+        );
+
+        console.log(
+          `[stripe-webhook] Subscription ${subscription.status} — synced user ${user.id} to ${nextTier}`
+        );
+        break;
+      }
+
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId =
