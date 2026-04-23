@@ -256,9 +256,36 @@ export default function Home() {
                 Pro
               </span>
             ) : (
-              <span className="text-text-tertiary text-xs font-mono">
-                {usage.remaining}/{usage.limit} extractions left
-              </span>
+              <>
+                <span className="text-text-tertiary text-xs font-mono">
+                  {usage.remaining}/{usage.limit} extractions left
+                </span>
+                <button
+                  onClick={async () => {
+                    setCheckoutLoading(true);
+                    try {
+                      const res = await fetch('/api/checkout', { method: 'POST' });
+                      if (res.ok) {
+                        const { url } = await res.json();
+                        window.location.href = url;
+                      } else {
+                        console.error('[checkout] Failed:', res.status);
+                        setCheckoutLoading(false);
+                      }
+                    } catch (err) {
+                      console.error('[checkout] Error:', err);
+                      setCheckoutLoading(false);
+                    }
+                  }}
+                  disabled={checkoutLoading}
+                  className={`px-3 py-1.5 bg-accent text-primary font-body font-semibold text-xs
+                             rounded-lg hover:bg-accent-hover hover:gold-glow
+                             transition-all duration-200
+                             ${checkoutLoading ? 'opacity-60 cursor-wait' : ''}`}
+                >
+                  {checkoutLoading ? 'Redirecting...' : 'Upgrade to Pro'}
+                </button>
+              </>
             )
           )}
           {signedIn ? (
