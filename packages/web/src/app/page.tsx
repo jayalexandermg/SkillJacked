@@ -246,9 +246,14 @@ export default function Home() {
       )}
 
       <nav className="flex items-center justify-between px-6 pt-6 max-w-5xl mx-auto">
-        <a href="/dashboard" className="text-text-secondary hover:text-text-primary text-sm transition-colors">
-          My Skills
-        </a>
+        <div className="flex items-center gap-5">
+          <a href="/dashboard" className="text-text-secondary hover:text-text-primary text-sm transition-colors">
+            My Skills
+          </a>
+          <a href="/pricing" className="text-text-secondary hover:text-text-primary text-sm transition-colors">
+            Pricing
+          </a>
+        </div>
         <div className="flex items-center gap-4">
           {signedIn && usage && (
             usage.tier === 'pro' ? (
