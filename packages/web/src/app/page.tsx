@@ -397,9 +397,14 @@ export default function Home() {
                   <p className="text-text-secondary text-sm mb-4 text-center">
                     {fullSkillsCount} skills extracted
                     {!signedIn && (
-                      <span className="text-accent ml-1">
-                        (sign up to unlock them all)
-                      </span>
+                      <SignInButton mode="modal">
+                        <button
+                          type="button"
+                          className="text-accent ml-1 inline underline-offset-4 transition-all duration-200 hover:text-accent-hover hover:underline focus-visible:outline-none focus-visible:underline"
+                        >
+                          (sign up to unlock them all)
+                        </button>
+                      </SignInButton>
                     )}
                   </p>
 
