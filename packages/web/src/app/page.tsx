@@ -77,7 +77,6 @@ export default function Home() {
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [upgradeBanner, setUpgradeBanner] = useState(false);
   useEffect(() => {
     const restoredSkills = getStoredExtraction();
 
@@ -133,21 +132,6 @@ export default function Home() {
       })
       .catch((err) => console.error('[auto-save] Error:', err));
   }, [fetchUsage, isLoaded, rawSkills, saveSkillsToApi, signedIn]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('upgraded') !== '1') return;
-
-    setUpgradeBanner(true);
-    window.history.replaceState({}, '', '/');
-
-    if (signedIn) {
-      void fetchUsage();
-    }
-
-    const timer = setTimeout(() => setUpgradeBanner(false), 5000);
-    return () => clearTimeout(timer);
-  }, [fetchUsage, signedIn]);
 
   useEffect(() => {
     if (rawSkills.length === 0) return;
@@ -245,14 +229,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen">
-      {upgradeBanner && (
-        <div className="bg-success/20 border-b border-success/40 px-6 py-3 text-center">
-          <p className="text-success text-sm font-medium">
-            Welcome to Pro! You now have 50 extractions/month.
-          </p>
-        </div>
-      )}
-
       <nav className="flex items-center justify-between px-6 pt-6 max-w-5xl mx-auto">
         <div className="flex items-center gap-5">
           <a href="/dashboard" className="text-text-secondary hover:text-text-primary text-sm transition-colors">
