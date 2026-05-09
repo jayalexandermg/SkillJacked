@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { getSupabase } from '@/lib/supabase';
 import { getStripe } from '@/lib/stripe';
 
@@ -12,14 +12,34 @@ export async function POST() {
   const supabase = getSupabase();
   const stripe = getStripe();
 
-  const { data: user, error } = await supabase
+  let { data: user, error } = await supabase
     .from('users')
     .select('id, stripe_customer_id, email')
     .eq('clerk_id', userId)
     .single();
 
   if (error || !user) {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const clerkUser = await currentUser();
+    const email = clerkUser?.primaryEmailAddress?.emailAddress
+      ?? clerkUser?.emailAddresses[0]?.emailAddress;
+
+    if (!email) {
+      return NextResponse.json({ error: 'User email not found' }, { status: 404 });
+    }
+
+    const created = await supabase
+      .from('users')
+      .upsert({ clerk_id: userId, email }, { onConflict: 'clerk_id' })
+      .select('id, stripe_customer_id, email')
+      .single();
+
+    user = created.data;
+    error = created.error;
+
+    if (error || !user) {
+      console.error('[checkout] Failed to sync user:', error);
+      return NextResponse.json({ error: 'User sync failed' }, { status: 500 });
+    }
   }
 
   let stripeCustomerId = user.stripe_customer_id;
