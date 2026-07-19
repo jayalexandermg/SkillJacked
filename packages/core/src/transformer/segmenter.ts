@@ -6,6 +6,7 @@ import { SegmenterParseError } from '../utils/errors';
 import { withRetry, type RetryOpts } from '../utils/retry';
 
 const ANTHROPIC_TIMEOUT_MS = 90_000;
+const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
 export interface SegmenterInput {
   title: string;
@@ -47,8 +48,9 @@ async function callClaude(
 ): Promise<string> {
   const response = await client.messages.create(
     {
-      model: 'claude-sonnet-4-20250514',
+      model: ANTHROPIC_MODEL,
       max_tokens: 8192,
+      thinking: { type: 'disabled' },
       system,
       messages: [{ role: 'user', content: userMessage }],
     },
@@ -58,8 +60,8 @@ async function callClaude(
   if (!response.content || response.content.length === 0) {
     throw new Error('Claude returned no content');
   }
-  const block = response.content[0];
-  if (block.type !== 'text') {
+  const block = response.content.find((b) => b.type === 'text');
+  if (!block) {
     throw new Error('Claude returned non-text content');
   }
   return block.text;

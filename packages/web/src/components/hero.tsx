@@ -7,7 +7,7 @@ const WORDS = [
   { text: 'into',      isGold: false },
   { text: 'execution', isGold: true },
 ];
-const HOLD_TIMES = [1800, 900, 2200];
+const HOLD_TIMES = [900, 900, 2200];
 const TRANSITION_MS = 600;
 
 type Phase = 'hold' | 'exiting' | 'entering-instant';
