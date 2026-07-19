@@ -47,7 +47,7 @@ async function callClaude(
 ): Promise<string> {
   const response = await client.messages.create(
     {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
       max_tokens: 8192,
       system,
       messages: [{ role: 'user', content: userMessage }],
