@@ -49,6 +49,7 @@ async function callClaude(
     {
       model: 'claude-sonnet-5',
       max_tokens: 8192,
+      thinking: { type: 'disabled' },
       system,
       messages: [{ role: 'user', content: userMessage }],
     },
@@ -58,8 +59,8 @@ async function callClaude(
   if (!response.content || response.content.length === 0) {
     throw new Error('Claude returned no content');
   }
-  const block = response.content[0];
-  if (block.type !== 'text') {
+  const block = response.content.find((b) => b.type === 'text');
+  if (!block) {
     throw new Error('Claude returned non-text content');
   }
   return block.text;

@@ -36,6 +36,7 @@ export async function generateSkill(
           {
             model: 'claude-sonnet-5',
             max_tokens: 4096,
+            thinking: { type: 'disabled' },
             system: SKILL_EXTRACTION_PROMPT,
             messages: [{ role: 'user', content: userMessage }],
           },
@@ -62,10 +63,10 @@ export async function generateSkill(
     throw new TransformError('AI returned no content. Please try again.', { kind: 'parse', detail: 'Empty content array' });
   }
 
-  const content = response.content[0];
-  if (content.type !== 'text') {
+  const content = response.content.find((b) => b.type === 'text');
+  if (!content) {
     throw new TransformError('AI extraction failed. Please try again in a moment.', {
-      kind: 'parse', detail: `Unexpected content type: ${content.type}`,
+      kind: 'parse', detail: 'No text content in response',
     });
   }
 
@@ -203,6 +204,7 @@ export async function generateSkillsFromPlan(
                 {
                   model: 'claude-sonnet-5',
                   max_tokens: 4096,
+                  thinking: { type: 'disabled' },
                   system: SKILL_GENERATOR_SYSTEM_PROMPT,
                   messages: [{ role: 'user', content: userMessage }],
                 },
@@ -228,10 +230,10 @@ export async function generateSkillsFromPlan(
         if (!response.content || response.content.length === 0) {
           throw new TransformError('AI returned no content. Please try again.', { kind: 'parse', detail: 'Empty content array' });
         }
-        const block = response.content[0];
-        if (block.type !== 'text') {
+        const block = response.content.find((b) => b.type === 'text');
+        if (!block) {
           throw new TransformError('AI extraction failed. Please try again in a moment.', {
-            kind: 'parse', detail: `Unexpected content type: ${block.type}`,
+            kind: 'parse', detail: 'No text content in response',
           });
         }
 
