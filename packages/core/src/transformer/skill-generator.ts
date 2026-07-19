@@ -9,6 +9,7 @@ import { withRetry, type RetryOpts } from '../utils/retry';
 import { createLimiter } from '../utils/concurrency';
 
 const ANTHROPIC_TIMEOUT_MS = 60_000; // 60s
+const ANTHROPIC_MODEL = 'claude-sonnet-5';
 const MIN_EXCERPT_LENGTH = 50;
 
 function sanitizeSkillName(raw: string): string {
@@ -34,7 +35,7 @@ export async function generateSkill(
       try {
         return await client.messages.create(
           {
-            model: 'claude-sonnet-5',
+            model: ANTHROPIC_MODEL,
             max_tokens: 4096,
             thinking: { type: 'disabled' },
             system: SKILL_EXTRACTION_PROMPT,
@@ -202,7 +203,7 @@ export async function generateSkillsFromPlan(
             try {
               return await client.messages.create(
                 {
-                  model: 'claude-sonnet-5',
+                  model: ANTHROPIC_MODEL,
                   max_tokens: 4096,
                   thinking: { type: 'disabled' },
                   system: SKILL_GENERATOR_SYSTEM_PROMPT,

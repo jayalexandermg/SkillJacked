@@ -6,6 +6,7 @@ import { SegmenterParseError } from '../utils/errors';
 import { withRetry, type RetryOpts } from '../utils/retry';
 
 const ANTHROPIC_TIMEOUT_MS = 90_000;
+const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
 export interface SegmenterInput {
   title: string;
@@ -47,7 +48,7 @@ async function callClaude(
 ): Promise<string> {
   const response = await client.messages.create(
     {
-      model: 'claude-sonnet-5',
+      model: ANTHROPIC_MODEL,
       max_tokens: 8192,
       thinking: { type: 'disabled' },
       system,
