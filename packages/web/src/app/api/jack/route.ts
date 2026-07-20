@@ -4,6 +4,13 @@ import type { OutputFormat } from '@skilljack/core';
 import { auth } from '@clerk/nextjs/server';
 import { getSupabase } from '@/lib/supabase';
 
+// Extraction does multiple sequential Claude calls (segment + up to 10 skill
+// generations at concurrency 3) and can run well past Vercel's default
+// function timeout. Cap set to 60s — the safe ceiling on both Hobby and Pro
+// without Fluid Compute; raise to 300 once the project is confirmed on a
+// plan/mode that allows it.
+export const maxDuration = 60;
+
 // --- Fix 1: In-memory rate limiter ---
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 5;
