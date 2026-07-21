@@ -13,9 +13,9 @@ export interface SkillData {
   };
 }
 
-// Slightly above the API route's maxDuration (60s) so a server-side timeout
+// Slightly above the API route's maxDuration (150s) so a server-side timeout
 // surfaces as a clean error before the client's own wait gives up first.
-const JACK_TIMEOUT_MS = 65_000;
+const JACK_TIMEOUT_MS = 155_000;
 
 export async function jackSkills(url: string): Promise<SkillData[]> {
   let res: Response;
