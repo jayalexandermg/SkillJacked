@@ -37,10 +37,11 @@ export interface JackSkillsOptions extends JackOptions {
   count?: number;
   concurrency?: number;
   onSkip?: (msg: string) => void;
+  onDebug?: (msg: string) => void;
 }
 
 export async function jackSkills(url: string, options: JackSkillsOptions = {}): Promise<SkillOutput[]> {
-  const { count = 10, concurrency = 3, onSkip, ...baseOptions } = options;
+  const { count = 10, concurrency = 3, onSkip, onDebug, ...baseOptions } = options;
   const outputFormat = baseOptions.format ?? 'claude-skill';
 
   const rawContent = await extract(url, baseOptions.extraction);
@@ -57,6 +58,7 @@ export async function jackSkills(url: string, options: JackSkillsOptions = {}): 
       apiKey: baseOptions.apiKey,
       maxRetries: baseOptions.maxRetries,
       onRetry: baseOptions.onRetry,
+      onDebug,
     },
   );
 

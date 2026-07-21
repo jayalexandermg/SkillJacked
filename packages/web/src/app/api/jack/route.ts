@@ -165,6 +165,7 @@ export async function POST(request: NextRequest) {
       extraction: {
         onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
       },
+      onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
       onSkip: (msg) => console.log(`[/api/jack] ${msg}`),
     });
 

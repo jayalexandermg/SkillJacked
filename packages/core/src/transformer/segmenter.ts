@@ -21,6 +21,7 @@ export interface SegmenterOpts {
   apiKey?: string;
   maxRetries?: number;
   onRetry?: (msg: string) => void;
+  onDebug?: (msg: string) => void;
 }
 
 function extractJSON(raw: string): string {
@@ -49,8 +50,10 @@ async function callClaude(
   const response = await client.messages.create(
     {
       model: ANTHROPIC_MODEL,
-      max_tokens: 8192,
-      thinking: { type: 'disabled' },
+      max_tokens: 14000,
+      // No `thinking` param: Claude Sonnet 5 defaults to adaptive thinking
+      // when omitted. The pinned SDK (0.39.0) predates the `adaptive`
+      // thinking type, so passing it explicitly fails to typecheck.
       system,
       messages: [{ role: 'user', content: userMessage }],
     },
@@ -71,7 +74,7 @@ export async function segmentTranscript(
   input: SegmenterInput,
   opts: SegmenterOpts = {},
 ): Promise<SkillPlan> {
-  const { maxSegments = 12, minLines = 5, apiKey, maxRetries = 3, onRetry } = opts;
+  const { maxSegments = 12, minLines = 5, apiKey, maxRetries = 3, onRetry, onDebug } = opts;
   const client = new Anthropic({ apiKey });
   const retryOpts: RetryOpts = { maxRetries, onRetry };
 
@@ -105,7 +108,9 @@ export async function segmentTranscript(
 
   // First parse attempt
   try {
-    return parseSkillPlan(rawOutput);
+    const plan = parseSkillPlan(rawOutput);
+    onDebug?.(`Segmenter produced ${plan.segments.length} segment(s) (requested max ${maxSegments})`);
+    return plan;
   } catch {
     // Repair attempt
   }
@@ -129,7 +134,9 @@ export async function segmentTranscript(
   }
 
   try {
-    return parseSkillPlan(repairOutput);
+    const plan = parseSkillPlan(repairOutput);
+    onDebug?.(`Segmenter (after repair) produced ${plan.segments.length} segment(s) (requested max ${maxSegments})`);
+    return plan;
   } catch {
     throw new SegmenterParseError(
       'Failed to parse SkillPlan JSON after repair attempt',
