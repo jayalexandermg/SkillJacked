@@ -225,6 +225,7 @@ export default function Home() {
     setActiveSkillIndex(0);
     setErrorMessage('');
     clearStoredExtraction();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   return (
