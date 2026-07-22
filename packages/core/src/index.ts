@@ -46,32 +46,55 @@ export async function jackSkills(url: string, options: JackSkillsOptions = {}): 
 
   const rawContent = await extract(url, baseOptions.extraction);
 
-  const plan = await segmentTranscript(
-    {
-      title: rawContent.title,
-      sourceUrl: rawContent.sourceUrl,
-      duration: rawContent.duration,
-      transcript: rawContent.transcript,
-    },
-    {
-      maxSegments: count,
+  // Segments a fresh SkillPlan from the transcript and generates skills from
+  // it. Pulled into a closure so a totally-empty result (see below) can
+  // retry with a brand new segmenter call rather than reusing the same
+  // (possibly malformed) plan.
+  const runOnce = async (): Promise<StructuredSkill[]> => {
+    const plan = await segmentTranscript(
+      {
+        title: rawContent.title,
+        sourceUrl: rawContent.sourceUrl,
+        duration: rawContent.duration,
+        transcript: rawContent.transcript,
+      },
+      {
+        maxSegments: count,
+        apiKey: baseOptions.apiKey,
+        maxRetries: baseOptions.maxRetries,
+        onRetry: baseOptions.onRetry,
+        onDebug,
+      },
+    );
+
+    const result = await generateSkillsFromPlan(rawContent, plan, {
       apiKey: baseOptions.apiKey,
+      count,
+      concurrency,
       maxRetries: baseOptions.maxRetries,
       onRetry: baseOptions.onRetry,
-      onDebug,
-    },
-  );
+      onSkip,
+    });
 
-  const result = await generateSkillsFromPlan(rawContent, plan, {
-    apiKey: baseOptions.apiKey,
-    count,
-    concurrency,
-    maxRetries: baseOptions.maxRetries,
-    onRetry: baseOptions.onRetry,
-    onSkip,
-  });
+    return result.skills;
+  };
 
-  return result.skills.map((skill) => ({
+  let skills = await runOnce();
+
+  // The segmenter is an LLM call: it can occasionally return a plan whose
+  // line-index boundaries don't line up with the transcript for that one
+  // run, causing every segment to fail the excerpt guard even though the
+  // same video succeeds on other runs. A single fresh attempt -- a new
+  // segmenter call, not a retry of the same plan -- resolves this in the
+  // overwhelming majority of cases without materially changing the
+  // happy-path latency (this only triggers when the first pass produced
+  // nothing at all).
+  if (skills.length === 0) {
+    onDebug?.('First pass produced 0 skills -- retrying with a fresh segmentation');
+    skills = await runOnce();
+  }
+
+  return skills.map((skill) => ({
     skill,
     formatted: format(skill, outputFormat),
   }));

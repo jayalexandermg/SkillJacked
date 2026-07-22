@@ -116,6 +116,8 @@ function recoverExcerpt(
   segment: SkillSegment,
   lines: string[],
   fullTranscript: string,
+  segmentIndex: number,
+  totalSegments: number,
 ): string {
   // Attempt 1: Expand the line window by ±10 lines
   const expandedStart = Math.max(0, segment.start_line - 10);
@@ -136,6 +138,22 @@ function recoverExcerpt(
   const largerWindow = fullTranscript.slice(largerStart, largerEnd);
   if (largerWindow.trim().length >= MIN_EXCERPT_LENGTH) {
     return `Topic: ${segment.proposed_name}\n\n${largerWindow}`;
+  }
+
+  // Attempt 4: Guaranteed fallback. Attempts 1-3 all key off the segmenter's
+  // start_line/end_line -- if the model's line-index output was wrong for
+  // this run (a known LLM failure mode: miscounting exact line numbers
+  // across a long transcript), every attempt keyed off that same bad
+  // position fails the same way. This ignores the model's line indices
+  // entirely and slices a proportional chunk of the transcript by the
+  // segment's position in the plan, so a segment is never skipped outright
+  // as long as the transcript itself has enough content.
+  const chunkSize = Math.floor(fullTranscript.length / totalSegments) || fullTranscript.length;
+  const chunkStart = segmentIndex * chunkSize;
+  const chunkEnd = segmentIndex === totalSegments - 1 ? fullTranscript.length : chunkStart + chunkSize;
+  const proportionalChunk = fullTranscript.slice(chunkStart, chunkEnd);
+  if (proportionalChunk.trim().length >= MIN_EXCERPT_LENGTH) {
+    return `Topic: ${segment.proposed_name}\n\n${proportionalChunk}`;
   }
 
   return '';
@@ -169,13 +187,13 @@ export async function generateSkillsFromPlan(
 
   // Process segments through the concurrency limiter, preserving order
   const results = await Promise.all(
-    targets.map((segment) =>
+    targets.map((segment, segmentIndex) =>
       limiter.run(async () => {
         // --- Excerpt guard ---
         let excerpt = lines.slice(segment.start_line, segment.end_line + 1).join('\n');
 
         if (excerpt.trim().length < MIN_EXCERPT_LENGTH) {
-          excerpt = recoverExcerpt(segment, lines, rawContent.transcript);
+          excerpt = recoverExcerpt(segment, lines, rawContent.transcript, segmentIndex, targets.length);
         }
 
         if (excerpt.trim().length < MIN_EXCERPT_LENGTH) {
