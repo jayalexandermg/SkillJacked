@@ -395,15 +395,57 @@ export default function Home() {
                             : '';
 
                       return (
-                        <button
+                        <div
                           key={`${skill.raw.skill.name}-${index}`}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => setActiveSkillIndex(index)}
-                          className={`text-left p-5 rounded-lg border transition-all duration-200 ${
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setActiveSkillIndex(index);
+                            }
+                          }}
+                          className={`group relative text-left p-5 rounded-lg border transition-all duration-200 cursor-pointer ${
                             isActive
                               ? 'border-accent bg-surface shadow-[0_0_0_1px_rgba(224,200,102,0.25)]'
                               : 'border-border-subtle bg-surface hover:border-border-focus'
                           }`}
                         >
+                          {skill.tier !== 'full' && (
+                            <div
+                              className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg
+                                         bg-primary/85 px-4 text-center opacity-0 backdrop-blur-[2px]
+                                         transition-opacity duration-200 group-hover:opacity-100"
+                            >
+                              <svg
+                                className="h-6 w-6 text-accent"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.75"
+                              >
+                                <rect x="5" y="11" width="14" height="9" rx="2" />
+                                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                              </svg>
+                              <p className="text-sm text-text-secondary">
+                                {skill.tier === 'partial'
+                                  ? 'Sign up to unlock this skill'
+                                  : 'Sign up to unlock all 10 skills'}
+                              </p>
+                              <SignInButton mode="modal">
+                                <button
+                                  type="button"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-primary
+                                             transition-colors duration-200 hover:bg-accent-hover"
+                                >
+                                  Sign Up Free
+                                </button>
+                              </SignInButton>
+                            </div>
+                          )}
+
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-accent text-[11px] font-semibold uppercase tracking-[0.18em] mb-2">
@@ -451,7 +493,7 @@ export default function Home() {
                                 : 'This skill stays locked until you sign up.'}
                             </p>
                           )}
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
