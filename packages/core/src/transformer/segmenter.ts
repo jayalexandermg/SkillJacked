@@ -5,7 +5,7 @@ import { normalizeTranscript } from './normalize-transcript';
 import { SegmenterParseError } from '../utils/errors';
 import { withRetry, type RetryOpts } from '../utils/retry';
 
-const ANTHROPIC_TIMEOUT_MS = 90_000;
+const ANTHROPIC_TIMEOUT_MS = 110_000;
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
 export interface SegmenterInput {
@@ -47,10 +47,18 @@ async function callClaude(
   system: string,
   userMessage: string,
 ): Promise<string> {
-  const response = await client.messages.create(
+  // Streamed rather than a plain create(): max_tokens is a *shared* budget
+  // between thinking and the actual JSON output on this model. 14000 was
+  // enough for the JSON alone but could get squeezed by thinking on longer
+  // transcripts, truncating the segments array mid-plan -- symptom: a
+  // consistent 1-2 segments instead of the requested 6-12, every run, on
+  // videos with substantial transcripts. Streaming removes the informal
+  // ~16k non-streaming timeout ceiling, so max_tokens can be sized to
+  // comfortably cover thinking *and* a full detailed plan.
+  const stream = client.messages.stream(
     {
       model: ANTHROPIC_MODEL,
-      max_tokens: 14000,
+      max_tokens: 32000,
       // No `thinking` param: Claude Sonnet 5 defaults to adaptive thinking
       // when omitted. The pinned SDK (0.39.0) predates the `adaptive`
       // thinking type, so passing it explicitly fails to typecheck.
@@ -59,6 +67,8 @@ async function callClaude(
     },
     { signal: AbortSignal.timeout(ANTHROPIC_TIMEOUT_MS) },
   );
+
+  const response = await stream.finalMessage();
 
   if (!response.content || response.content.length === 0) {
     throw new Error('Claude returned no content');
