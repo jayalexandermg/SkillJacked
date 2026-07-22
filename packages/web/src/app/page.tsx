@@ -185,6 +185,14 @@ export default function Home() {
     try {
       const data = await jackSkills(url);
 
+      if (data.length === 0) {
+        setErrorMessage(
+          "We couldn't extract any skills from this video. Try a different video, or one with more instructional/how-to content.",
+        );
+        setState('error');
+        return;
+      }
+
       setRawSkills(data);
       setActiveSkillIndex(0);
       setState('preview');
