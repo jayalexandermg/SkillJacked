@@ -152,7 +152,15 @@ export async function extractYouTube(
   // --- Stage 4: Metadata fallback ---
   onDebug?.('Stage 4: Metadata fallback...');
   const metaResult = await extractMetadataFallback(videoId, metadata.title, onDebug);
-  if (metaResult) {
+  // Unlike stages 1-3, this branch always returns a non-null object even in
+  // its worst case (a title-only placeholder sentence, ~20 words) -- so it
+  // needs the same minimum-substance gate stages 1-3 already enforce.
+  // Without it, a video with no captions and no yt-dlp available would
+  // "succeed" with a couple sentences of content, and the segmenter would
+  // be asked to split that into up to 10 topics -- producing 0-1 wildly
+  // inconsistent, low-quality "skills" instead of a clear failure.
+  if (metaResult && metaResult.transcript.split(/\s+/).length >= MIN_TRANSCRIPT_WORDS) {
+    onDebug?.(`Stage 4 succeeded (${metaResult.transcript.split(/\s+/).length} words via metadata)`);
     return {
       title: metadata.title,
       transcript: metaResult.transcript,
@@ -164,6 +172,6 @@ export async function extractYouTube(
   }
 
   throw new ExtractionError(
-    'Could not obtain transcript through any method (captions, yt-dlp, whisper, or metadata).'
+    "This video doesn't have captions available, and there wasn't enough description/chapter content to work from instead. Try a video with captions enabled, or one with a detailed description."
   );
 }
