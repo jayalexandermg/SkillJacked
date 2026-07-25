@@ -440,7 +440,7 @@ export default function Home() {
                               <p className="text-sm text-text-secondary">
                                 {skill.tier === 'partial'
                                   ? 'Sign up to unlock this skill'
-                                  : 'Sign up to unlock all 10 skills'}
+                                  : `Sign up to unlock all ${fullSkillsCount} skills`}
                               </p>
                               <SignInButton mode="modal">
                                 <button
