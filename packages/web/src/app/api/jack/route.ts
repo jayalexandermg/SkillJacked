@@ -167,6 +167,7 @@ export async function POST(request: NextRequest) {
       concurrency: 3,
       extraction: {
         onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
+        supadataApiKey: process.env.SUPADATA_API_KEY,
       },
       onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
       onSkip: (msg) => console.log(`[/api/jack] ${msg}`),

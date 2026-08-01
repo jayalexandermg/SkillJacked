@@ -1,7 +1,7 @@
-import { fetchTranscript as fetchTranscriptPlus } from 'youtube-transcript-plus';
+import { getSubtitles } from 'youtube-caption-extractor';
 import { RawContent, ExtractionOptions } from './types';
 import { ExtractionError } from '../utils/errors';
-import { extractWithYtDlp, transcribeWithWhisper, extractMetadataFallback } from './fallbacks';
+import { extractWithYtDlp, transcribeWithWhisper, extractMetadataFallback, fetchFromSupadata } from './fallbacks';
 
 interface OEmbedResponse {
   title: string;
@@ -12,20 +12,6 @@ interface OEmbedResponse {
 const OEMBED_TIMEOUT_MS = 15_000;
 const MAX_TRANSCRIPT_WORDS = 50_000;
 const MIN_TRANSCRIPT_WORDS = 100;
-
-// HTML entity decoder
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(Number(num)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ');
-}
 
 async function fetchVideoMetadata(url: string): Promise<{ title: string }> {
   const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
@@ -59,19 +45,22 @@ export async function extractYouTube(
     throw new ExtractionError('Could not fetch video metadata. Check that the URL is valid.');
   }
 
-  // --- Stage 1: YouTube captions via youtube-transcript-plus ---
+  // --- Stage 1: YouTube captions via youtube-caption-extractor ---
+  // Free, open-source, no API key. Fetches manual AND auto-generated (ASR)
+  // caption tracks directly from YouTube -- unlike the library this
+  // replaced, which only reliably surfaced manual tracks.
   try {
     onDebug?.('Stage 1: Fetching YouTube captions...');
-    const transcript = await fetchTranscriptPlus(videoId, { lang: 'en' });
+    const subtitles = await getSubtitles({ videoID: videoId, lang: 'en' });
 
-    if (!transcript || transcript.length === 0) {
+    if (!subtitles || subtitles.length === 0) {
       throw new Error('No captions returned');
     }
 
-    const segments = transcript.map((s: any) => ({
-      text: decodeHtmlEntities(s.text || ''),
-      start: typeof s.offset === 'number' ? s.offset : (s.start || 0),
-      duration: typeof s.duration === 'number' ? s.duration : 0,
+    const segments = subtitles.map((s) => ({
+      text: s.text || '',
+      start: parseFloat(s.start) || 0,
+      duration: parseFloat(s.dur) || 0,
     }));
 
     let text = segments.map((s) => s.text).join('\n');
@@ -110,8 +99,33 @@ export async function extractYouTube(
     }
   }
 
-  // --- Stage 2: yt-dlp subtitle extraction ---
-  onDebug?.('Stage 2: Trying yt-dlp subtitles...');
+  // --- Stage 2: Supadata (managed API, ASR fallback for caption-less videos) ---
+  // No-op until SUPADATA_API_KEY is set -- free tier (100 credits/mo) as of
+  // writing, safety net for the auto-caption/no-caption cases Stage 1 misses.
+  const supadataKey = opts?.supadataApiKey || process.env.SUPADATA_API_KEY;
+  if (supadataKey) {
+    onDebug?.('Stage 2: Trying Supadata...');
+    const supadataResult = await fetchFromSupadata(videoId, supadataKey, onDebug);
+    if (supadataResult) {
+      const text = validateAndCap(supadataResult.transcript);
+      if (text.split(/\s+/).length >= MIN_TRANSCRIPT_WORDS) {
+        return {
+          title: metadata.title,
+          transcript: text,
+          duration: supadataResult.duration,
+          sourceUrl,
+          platform: 'youtube',
+          transcriptMethod: 'supadata',
+        };
+      }
+      onDebug?.('Supadata result too short, continuing to next stage');
+    }
+  } else {
+    onDebug?.('Stage 2: Supadata API key not configured, skipping');
+  }
+
+  // --- Stage 3: yt-dlp subtitle extraction ---
+  onDebug?.('Stage 3: Trying yt-dlp subtitles...');
   const ytdlpResult = await extractWithYtDlp(videoId, onDebug);
   if (ytdlpResult) {
     const text = validateAndCap(ytdlpResult.transcript);
@@ -128,8 +142,8 @@ export async function extractYouTube(
     onDebug?.('yt-dlp result too short, continuing to next stage');
   }
 
-  // --- Stage 3: Whisper transcription ---
-  onDebug?.('Stage 3: Trying Whisper transcription...');
+  // --- Stage 4: Whisper transcription ---
+  onDebug?.('Stage 4: Trying Whisper transcription...');
   const whisperResult = await transcribeWithWhisper(videoId, {
     openaiApiKey: opts?.openaiApiKey,
     onDebug,
@@ -149,18 +163,18 @@ export async function extractYouTube(
     onDebug?.('Whisper result too short, continuing to metadata fallback');
   }
 
-  // --- Stage 4: Metadata fallback ---
-  onDebug?.('Stage 4: Metadata fallback...');
+  // --- Stage 5: Metadata fallback ---
+  onDebug?.('Stage 5: Metadata fallback...');
   const metaResult = await extractMetadataFallback(videoId, metadata.title, onDebug);
-  // Unlike stages 1-3, this branch always returns a non-null object even in
-  // its worst case (a title-only placeholder sentence, ~20 words) -- so it
-  // needs the same minimum-substance gate stages 1-3 already enforce.
-  // Without it, a video with no captions and no yt-dlp available would
-  // "succeed" with a couple sentences of content, and the segmenter would
-  // be asked to split that into up to 10 topics -- producing 0-1 wildly
-  // inconsistent, low-quality "skills" instead of a clear failure.
+  // This branch always returns a non-null object even in its worst case (a
+  // title-only placeholder sentence, ~20 words) -- so it needs the same
+  // minimum-substance gate every other stage already enforces. Without it,
+  // a video that exhausted every real transcript source would "succeed"
+  // with a couple sentences of content, and the segmenter would be asked to
+  // split that into up to 10 topics -- producing 0-1 wildly inconsistent,
+  // low-quality "skills" instead of a clear failure.
   if (metaResult && metaResult.transcript.split(/\s+/).length >= MIN_TRANSCRIPT_WORDS) {
-    onDebug?.(`Stage 4 succeeded (${metaResult.transcript.split(/\s+/).length} words via metadata)`);
+    onDebug?.(`Stage 5 succeeded (${metaResult.transcript.split(/\s+/).length} words via metadata)`);
     return {
       title: metadata.title,
       transcript: metaResult.transcript,
@@ -172,6 +186,8 @@ export async function extractYouTube(
   }
 
   throw new ExtractionError(
-    "This video doesn't have captions available, and there wasn't enough description/chapter content to work from instead. Try a video with captions enabled, or one with a detailed description."
+    supadataKey
+      ? "We couldn't get a transcript for this video through any method (captions, AI transcription, or video description). It may not have enough spoken/instructional content to work with. Try a different video."
+      : "This video's captions aren't accessible right now. Try a video with manually-added captions, or a video with a detailed description."
   );
 }
