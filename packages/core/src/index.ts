@@ -5,7 +5,9 @@ import { OutputFormat, FormattedOutput } from './formatter/types';
 import { StructuredSkill } from './transformer/types';
 import { segmentTranscript } from './transformer/segmenter';
 import { generateSkillsFromPlan } from './transformer/skill-generator';
-import type { ExtractionOptions } from './extractor/types';
+import type { ExtractionOptions, RawContent } from './extractor/types';
+import { capTranscriptWords } from './extractor/youtube';
+import { parseUrl } from './utils/url-parser';
 
 export interface SkillOutput {
   skill: StructuredSkill;
@@ -38,13 +40,56 @@ export interface JackSkillsOptions extends JackOptions {
   concurrency?: number;
   onSkip?: (msg: string) => void;
   onDebug?: (msg: string) => void;
+  /**
+   * Caller-supplied transcript (manual paste path, SPEC-R1 §4.C1). When
+   * present and non-empty, extraction is skipped entirely and this text flows
+   * through the identical segmentation→generation path. The 50k-word cap is
+   * enforced here (truncation) because validateAndCap/capTranscriptWords in
+   * the extraction path is bypassed by this route (CG-P1).
+   */
+  rawTranscript?: string;
+  /** Optional display title for the raw-transcript path (e.g. from oEmbed). */
+  rawTranscriptTitle?: string;
+}
+
+/**
+ * Build RawContent for a caller-supplied transcript. The url is still parsed
+ * and validated (same ValidationError surface as the extraction path), the
+ * transcript is capped at MAX_TRANSCRIPT_WORDS by truncation (CG-P1 —
+ * truncation chosen over rejection to match what the extraction path has
+ * always done with oversized transcripts), and the title degrades to a
+ * URL-derived value when the caller couldn't supply one.
+ */
+export function buildRawContent(
+  url: string,
+  rawTranscript: string,
+  title?: string,
+): RawContent {
+  const parsed = parseUrl(url);
+  const trimmedTitle = title?.trim();
+  return {
+    title: trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : `YouTube video ${parsed.videoId}`,
+    transcript: capTranscriptWords(rawTranscript.trim()),
+    duration: '',
+    sourceUrl: parsed.url,
+    platform: 'youtube',
+    transcriptMethod: 'raw',
+  };
 }
 
 export async function jackSkills(url: string, options: JackSkillsOptions = {}): Promise<SkillOutput[]> {
-  const { count = 10, concurrency = 3, onSkip, onDebug, ...baseOptions } = options;
+  const { count = 10, concurrency = 3, onSkip, onDebug, rawTranscript, rawTranscriptTitle, ...baseOptions } = options;
   const outputFormat = baseOptions.format ?? 'claude-skill';
 
-  const rawContent = await extract(url, baseOptions.extraction);
+  const hasRawTranscript = typeof rawTranscript === 'string' && rawTranscript.trim().length > 0;
+  const rawContent = hasRawTranscript
+    ? buildRawContent(url, rawTranscript, rawTranscriptTitle)
+    : await extract(url, baseOptions.extraction);
+  if (hasRawTranscript) {
+    onDebug?.(
+      `Using caller-supplied transcript (${rawContent.transcript.split(/\s+/).length} words); extraction skipped`,
+    );
+  }
 
   // Segments a fresh SkillPlan from the transcript and generates skills from
   // it. Pulled into a closure so a totally-empty result (see below) can
@@ -101,6 +146,7 @@ export async function jackSkills(url: string, options: JackSkillsOptions = {}): 
 }
 
 export { extract } from './extractor';
+export { capTranscriptWords, MAX_TRANSCRIPT_WORDS } from './extractor/youtube';
 export { transform } from './transformer';
 export { format } from './formatter';
 export { parseUrl } from './utils/url-parser';
