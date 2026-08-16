@@ -12,28 +12,56 @@ interface OEmbedResponse {
 
 const OEMBED_TIMEOUT_MS = 15_000;
 export const MAX_TRANSCRIPT_WORDS = 50_000;
+// Character bound (SPEC-R1 §4.H1): measured in UTF-16 code units — what
+// String.prototype.length returns and what every downstream consumer of the
+// string operates on. A word-only cap is evaded by whitespace-free input and
+// never binds for non-space-delimited languages (CJK); this bound covers both.
+export const MAX_TRANSCRIPT_UNITS = 500_000;
 
+/**
+ * Best-effort oEmbed title lookup. Throws a plain Error on failure — callers
+ * on every path treat metadata failure as degradable, never fatal
+ * (SPEC-R1 §4.H2-RESOLUTION).
+ */
 async function fetchVideoMetadata(url: string): Promise<{ title: string }> {
   const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
   const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(OEMBED_TIMEOUT_MS) });
   if (!res.ok) {
-    throw new ExtractionError('Could not fetch video metadata. Check that the URL is valid.');
+    throw new Error(`oEmbed returned ${res.status}`);
   }
   const data = (await res.json()) as OEmbedResponse;
   return { title: data.title };
 }
 
 /**
- * Cap a transcript at MAX_TRANSCRIPT_WORDS by truncation. This is the single
+ * Cap a transcript at min(MAX_TRANSCRIPT_WORDS, MAX_TRANSCRIPT_UNITS) by
+ * truncation, whichever bound binds first (SPEC-R1 §4.H1). This is the single
  * upper bound applied to every transcript that enters the segmentation
  * pipeline — extraction stages and the raw-transcript path both go through it.
+ * Leading/trailing whitespace is trimmed before word-splitting so padding
+ * can't shift the cut point (CR-S8).
  */
-export function capTranscriptWords(transcript: string): string {
-  const words = transcript.split(/\s+/);
-  if (words.length > MAX_TRANSCRIPT_WORDS) {
-    return words.slice(0, MAX_TRANSCRIPT_WORDS).join(' ');
+export function capTranscript(transcript: string): string {
+  const trimmed = transcript.trim();
+
+  // Word bound: whitespace-delimited words.
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  let out =
+    words.length > MAX_TRANSCRIPT_WORDS
+      ? words.slice(0, MAX_TRANSCRIPT_WORDS).join(' ')
+      : trimmed;
+
+  // Character bound: binds for whitespace-free and CJK input the word bound
+  // cannot see. Slice by code units, then back off one unit if the cut would
+  // split a surrogate pair.
+  if (out.length > MAX_TRANSCRIPT_UNITS) {
+    out = out.slice(0, MAX_TRANSCRIPT_UNITS);
+    const last = out.charCodeAt(out.length - 1);
+    if (last >= 0xd800 && last <= 0xdbff) {
+      out = out.slice(0, -1);
+    }
   }
-  return transcript;
+  return out;
 }
 
 export interface StageResult {
@@ -58,12 +86,31 @@ export const EXTRACTION_FAILED_MESSAGE =
  * videos/paths the native fetcher misses. Returns null on failure so the
  * pipeline falls through.
  */
+// Caller-imposed timeout on the stage 2 library call (SPEC-R1 §4.H3a),
+// consistent with Stage 1's 15s bounds — we don't trust the library's
+// internal default.
+const TRANSCRIPT_PLUS_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  }) as Promise<T>;
+}
+
 async function fetchViaTranscriptPlus(
   videoId: string,
   onDebug?: (msg: string) => void,
 ): Promise<StageResult | null> {
   try {
-    const segments = await fetchTranscript(videoId, { lang: 'en' });
+    const segments = await withTimeout(
+      fetchTranscript(videoId, { lang: 'en' }),
+      TRANSCRIPT_PLUS_TIMEOUT_MS,
+      'youtube-transcript-plus',
+    );
     if (!Array.isArray(segments) || segments.length === 0) {
       onDebug?.('youtube-transcript-plus returned no segments');
       return null;
@@ -176,20 +223,31 @@ export async function extractYouTube(
   sourceUrl: string,
   opts?: ExtractionOptions,
   stagesOverride?: TranscriptStage[],
+  metadataFetcher: (url: string) => Promise<{ title: string }> = fetchVideoMetadata,
 ): Promise<RawContent> {
-  let metadata: { title: string };
+  // Best-effort title (SPEC-R1 §4.H2-RESOLUTION): oEmbed is NOT a
+  // precondition for extraction. It runs from the same egress IP the caption
+  // stages do, so under the exact failure mode this pipeline exists to
+  // survive it would otherwise kill extraction before Supadata can run and
+  // misattribute the cause to the user's URL. On failure the stage pipeline
+  // runs anyway and the title degrades to the same URL-derived value the
+  // raw-transcript path uses.
+  let title: string;
   try {
-    metadata = await fetchVideoMetadata(sourceUrl);
-  } catch {
-    throw new ExtractionError('Could not fetch video metadata. Check that the URL is valid.');
+    title = (await metadataFetcher(sourceUrl)).title;
+  } catch (err: any) {
+    opts?.onDebug?.(
+      `oEmbed metadata failed (${err?.message?.substring(0, 100) ?? err}); using URL-derived title`,
+    );
+    title = `YouTube video ${videoId}`;
   }
 
   const stages = stagesOverride ?? buildDefaultStages(videoId, opts);
   const { result, method } = await runTranscriptStages(stages, opts);
 
   return {
-    title: metadata.title,
-    transcript: capTranscriptWords(result.transcript),
+    title,
+    transcript: capTranscript(result.transcript),
     duration: result.duration,
     sourceUrl,
     platform: 'youtube',

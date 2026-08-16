@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   buildDefaultStages,
   runTranscriptStages,
+  extractYouTube,
   EXTRACTION_FAILED_MESSAGE,
   type TranscriptStage,
 } from './youtube';
@@ -135,6 +136,39 @@ async function main() {
     );
   });
 
+  // --- AC16 (SPEC-R1 §4.H2-RESOLUTION): oEmbed is best-effort, never a gate ---
+
+  await check('oEmbed failure does not block extraction; title degrades to URL-derived (AC16)', async () => {
+    const calls: string[] = [];
+    const failingMetadata = async (_url: string): Promise<{ title: string }> => {
+      calls.push('oembed');
+      throw new Error('oEmbed returned 403');
+    };
+    const content = await extractYouTube(
+      'dQw4w9WgXcQ',
+      'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      undefined,
+      [stage('native-captions', 'captions', 'succeed', calls)],
+      failingMetadata,
+    );
+    assert(calls.join(',') === 'oembed,native-captions', `stages did not run after metadata failure: ${calls.join(',')}`);
+    assert(content.title === 'YouTube video dQw4w9WgXcQ', `expected URL-derived title, got ${content.title}`);
+    assert(content.transcript.length > 0, 'transcript missing');
+  });
+
+  await check('oEmbed success still supplies the real title', async () => {
+    const calls: string[] = [];
+    const okMetadata = async (_url: string) => ({ title: 'A Real Video' });
+    const content = await extractYouTube(
+      'dQw4w9WgXcQ',
+      'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      undefined,
+      [stage('native-captions', 'captions', 'succeed', calls)],
+      okMetadata,
+    );
+    assert(content.title === 'A Real Video', `got ${content.title}`);
+  });
+
   await check('no legacy stage or MIN gate identifiers remain in youtube.ts (grep-equivalent)', () => {
     const source = readFileSync(
       fileURLToPath(new URL('./youtube.ts', import.meta.url)),
@@ -146,6 +180,8 @@ async function main() {
       'extractMetadataFallback',
       'MIN_TRANSCRIPT_WORDS',
       'youtube-caption-extractor',
+      // AC16: the misattributing metadata hard-fail is gone from this path.
+      'Check that the URL is valid',
     ]) {
       assert(!source.includes(banned), `youtube.ts still references ${banned}`);
     }

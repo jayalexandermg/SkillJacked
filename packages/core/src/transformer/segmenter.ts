@@ -78,7 +78,9 @@ export async function segmentTranscript(
   input: SegmenterInput,
   opts: SegmenterOpts = {},
 ): Promise<SkillPlan> {
-  const { maxSegments = 12, minLines = 5, apiKey, maxRetries = 3, onRetry, onDebug } = opts;
+  // Default aligned with SEGMENTER_SYSTEM_PROMPT's "never exceed 10" rule
+  // (SPEC-R1 §4.H4) so a defaulted caller can't instruct the model past it.
+  const { maxSegments = 10, minLines = 5, apiKey, maxRetries = 3, onRetry, onDebug } = opts;
   const client = new Anthropic({ apiKey });
   const retryOpts: RetryOpts = { maxRetries, onRetry };
 

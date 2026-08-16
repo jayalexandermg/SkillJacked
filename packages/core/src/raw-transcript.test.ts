@@ -1,7 +1,8 @@
-// AC13 (SPEC-R1 §5, CG-P1): the raw-transcript path never lets more than
-// 50k words reach the segmenter (truncation), plus AC7 title semantics.
+// AC13 + AC15 (SPEC-R1 §5, CG-P1/§4.H1): the raw-transcript path never lets
+// more than min(50k words, 500k UTF-16 code units) reach the segmenter
+// (truncation on whichever bound binds first), plus AC7 title semantics.
 import { buildRawContent } from './index';
-import { capTranscriptWords, MAX_TRANSCRIPT_WORDS } from './extractor/youtube';
+import { capTranscript, MAX_TRANSCRIPT_WORDS, MAX_TRANSCRIPT_UNITS } from './extractor/youtube';
 import { ValidationError } from './utils/errors';
 
 let passed = 0;
@@ -38,9 +39,54 @@ check('rawTranscript at/below the cap passes through unchanged', () => {
   assert(content.transcript === small, 'transcript was altered');
 });
 
-check('capTranscriptWords is a no-op at exactly 50k words', () => {
+check('capTranscript is a no-op at exactly 50k words', () => {
   const exact = Array.from({ length: MAX_TRANSCRIPT_WORDS }, () => 'w').join(' ');
-  assert(capTranscriptWords(exact) === exact, 'exact-cap transcript was altered');
+  assert(capTranscript(exact) === exact, 'exact-cap transcript was altered');
+});
+
+// --- AC15: the character bound (§4.H1) ---
+
+check('whitespace-free ~640k-unit input is truncated to the 500k-unit bound (AC15)', () => {
+  const oversized = 'x'.repeat(640_000); // 1 "word", would evade a word-only cap
+  const content = buildRawContent(URL_OK, oversized);
+  assert(
+    content.transcript.length === MAX_TRANSCRIPT_UNITS,
+    `expected ${MAX_TRANSCRIPT_UNITS} units, got ${content.transcript.length}`,
+  );
+  assert(content.transcript === 'x'.repeat(MAX_TRANSCRIPT_UNITS), 'wrong prefix kept');
+});
+
+check('CJK input (no whitespace words) is truncated to the 500k-unit bound (AC15)', () => {
+  const oversized = '\u65e5\u672c\u8a9e\u306e\u6587\u5b57\u5217'.repeat(90_000); // 630k units, no spaces
+  const content = buildRawContent(URL_OK, oversized);
+  assert(
+    content.transcript.length === MAX_TRANSCRIPT_UNITS,
+    `expected ${MAX_TRANSCRIPT_UNITS} units, got ${content.transcript.length}`,
+  );
+});
+
+check('character-bound slice never splits a surrogate pair', () => {
+  // Astral chars are 2 units each; an odd-position cut would strand a high
+  // surrogate at the boundary. 251k astral chars = 502k units.
+  const oversized = '\u{1F600}'.repeat(251_000);
+  const capped = capTranscript(oversized);
+  assert(capped.length <= MAX_TRANSCRIPT_UNITS, 'exceeded unit bound');
+  const last = capped.charCodeAt(capped.length - 1);
+  assert(!(last >= 0xd800 && last <= 0xdbff), 'ended on a lone high surrogate');
+});
+
+check('word bound still binds first for normal spaced text (AC13 unchanged)', () => {
+  const oversized = Array.from({ length: MAX_TRANSCRIPT_WORDS + 100 }, () => 'hi').join(' ');
+  const capped = capTranscript(oversized);
+  assert(capped.split(/\s+/).length === MAX_TRANSCRIPT_WORDS, 'word bound did not bind');
+});
+
+check('leading whitespace cannot shift the word-cap cut point (CR-S8)', () => {
+  const words = Array.from({ length: MAX_TRANSCRIPT_WORDS }, (_, i) => `w${i}`).join(' ');
+  const capped = capTranscript(`   ${words}`);
+  const split = capped.split(/\s+/).filter(Boolean);
+  assert(split.length === MAX_TRANSCRIPT_WORDS, `expected full 50k words kept, got ${split.length}`);
+  assert(split[split.length - 1] === `w${MAX_TRANSCRIPT_WORDS - 1}`, 'last word was wrongly dropped');
 });
 
 check('provided title is used', () => {

@@ -6,7 +6,7 @@ import { StructuredSkill } from './transformer/types';
 import { segmentTranscript } from './transformer/segmenter';
 import { generateSkillsFromPlan } from './transformer/skill-generator';
 import type { ExtractionOptions, RawContent } from './extractor/types';
-import { capTranscriptWords } from './extractor/youtube';
+import { capTranscript } from './extractor/youtube';
 import { parseUrl } from './utils/url-parser';
 
 export interface SkillOutput {
@@ -44,7 +44,7 @@ export interface JackSkillsOptions extends JackOptions {
    * Caller-supplied transcript (manual paste path, SPEC-R1 §4.C1). When
    * present and non-empty, extraction is skipped entirely and this text flows
    * through the identical segmentation→generation path. The 50k-word cap is
-   * enforced here (truncation) because validateAndCap/capTranscriptWords in
+   * enforced here (truncation) because capTranscript in
    * the extraction path is bypassed by this route (CG-P1).
    */
   rawTranscript?: string;
@@ -55,10 +55,10 @@ export interface JackSkillsOptions extends JackOptions {
 /**
  * Build RawContent for a caller-supplied transcript. The url is still parsed
  * and validated (same ValidationError surface as the extraction path), the
- * transcript is capped at MAX_TRANSCRIPT_WORDS by truncation (CG-P1 —
- * truncation chosen over rejection to match what the extraction path has
- * always done with oversized transcripts), and the title degrades to a
- * URL-derived value when the caller couldn't supply one.
+ * transcript is capped at min(MAX_TRANSCRIPT_WORDS, MAX_TRANSCRIPT_UNITS) by
+ * truncation (CG-P1/§4.H1 — truncation chosen over rejection to match what
+ * the extraction path has always done with oversized transcripts), and the
+ * title degrades to a URL-derived value when the caller couldn't supply one.
  */
 export function buildRawContent(
   url: string,
@@ -69,7 +69,7 @@ export function buildRawContent(
   const trimmedTitle = title?.trim();
   return {
     title: trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : `YouTube video ${parsed.videoId}`,
-    transcript: capTranscriptWords(rawTranscript.trim()),
+    transcript: capTranscript(rawTranscript),
     duration: '',
     sourceUrl: parsed.url,
     platform: 'youtube',
@@ -146,7 +146,7 @@ export async function jackSkills(url: string, options: JackSkillsOptions = {}): 
 }
 
 export { extract } from './extractor';
-export { capTranscriptWords, MAX_TRANSCRIPT_WORDS } from './extractor/youtube';
+export { capTranscript, MAX_TRANSCRIPT_WORDS, MAX_TRANSCRIPT_UNITS } from './extractor/youtube';
 export { transform } from './transformer';
 export { format } from './formatter';
 export { parseUrl } from './utils/url-parser';
