@@ -32,6 +32,31 @@ export interface CaptionTrack {
 const WATCH_PAGE_TIMEOUT_MS = 15_000;
 const CAPTION_XML_TIMEOUT_MS = 15_000;
 
+// Post-read size guards (CR-S4): bound the downstream parsing work on a
+// hostile or unexpectedly huge response. Real watch pages run ~1–2MB of HTML
+// and caption XML runs well under 1MB, so these are generous. Measured in
+// UTF-16 code units of the decoded text (the read itself is not streamed, so
+// this bounds processing, not network buffering — noted honestly).
+const MAX_WATCH_PAGE_UNITS = 20_000_000;
+const MAX_CAPTION_XML_UNITS = 5_000_000;
+
+/**
+ * A caption track URL must point at YouTube itself (CR-S3): a hostile or
+ * corrupted player response must not be able to send us fetching an
+ * arbitrary origin with browser-like headers.
+ */
+export function isAllowedCaptionHost(baseUrl: string): boolean {
+  try {
+    const u = new URL(baseUrl);
+    return (
+      u.protocol === 'https:' &&
+      (u.hostname === 'youtube.com' || u.hostname.endsWith('.youtube.com'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 // A realistic desktop browser UA. YouTube serves the full watch-page HTML
 // (including ytInitialPlayerResponse) to browser-like clients.
 const BROWSER_HEADERS: Record<string, string> = {
@@ -48,20 +73,17 @@ const BROWSER_HEADERS: Record<string, string> = {
  * Throws ExtractionError if the object cannot be located or parsed.
  */
 export function parsePlayerResponse(html: string): Record<string, any> {
-  const marker = 'ytInitialPlayerResponse';
-  const markerIdx = html.indexOf(marker);
-  if (markerIdx === -1) {
+  // Anchor on the assignment (CR-S2): a bare indexOf on the identifier can
+  // land on an incidental mention (e.g. inside a script string) and walk
+  // braces from the wrong place.
+  const assignment = /ytInitialPlayerResponse\s*=\s*\{/.exec(html);
+  if (!assignment) {
     throw new ExtractionError(
       'Could not read video data from YouTube (player response missing).',
     );
   }
 
-  const braceStart = html.indexOf('{', markerIdx);
-  if (braceStart === -1) {
-    throw new ExtractionError(
-      'Could not read video data from YouTube (player response malformed).',
-    );
-  }
+  const braceStart = assignment.index + assignment[0].length - 1;
 
   let depth = 0;
   let inString = false;
@@ -126,10 +148,19 @@ export function selectCaptionTrack(tracks: CaptionTrack[]): CaptionTrack {
   );
 }
 
+// Decode a numeric character reference, guarding the RangeError
+// String.fromCodePoint throws on out-of-range or lone-surrogate values
+// (CR-S1): a hostile or corrupt cue must degrade, never crash the stage.
+function safeFromCodePoint(cp: number, original: string): string {
+  if (!Number.isInteger(cp) || cp < 0 || cp > 0x10ffff) return original;
+  if (cp >= 0xd800 && cp <= 0xdfff) return original; // lone surrogate
+  return String.fromCodePoint(cp);
+}
+
 function decodeXmlEntities(text: string): string {
   return text
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (m, hex) => safeFromCodePoint(parseInt(hex, 16), m))
+    .replace(/&#(\d+);/g, (m, dec) => safeFromCodePoint(parseInt(dec, 10), m))
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&#39;/g, "'")
@@ -160,10 +191,14 @@ export function parseCaptionXml(xml: string): NativeCaptionResult {
       attrs[attrMatch[1]] = attrMatch[2];
     }
 
-    // Cue bodies can contain entity-escaped markup; decode twice-nested
-    // escapes (&amp;#39;) by decoding, stripping tags, then decoding again.
+    // Strip real (unescaped) inline markup FIRST, then decode entities —
+    // twice, for double-escaped cues like &amp;#39; (CR-S1 ordering). The old
+    // decode-then-strip order let decoded entities form new "tags": a cue
+    // containing "x &lt; y and z &gt; w" decoded to "x < y and z > w" and the
+    // strip then ate " y and z " as if it were markup. After stripping, a
+    // decoded "<" is just text and stays that way.
     const decoded = decodeXmlEntities(
-      decodeXmlEntities(match[2]).replace(/<[^>]+>/g, ' '),
+      decodeXmlEntities(match[2].replace(/<[^>]+>/g, ' ')),
     )
       .replace(/\s+/g, ' ')
       .trim();
@@ -213,6 +248,9 @@ export async function fetchNativeCaptions(
     );
   }
   const html = await pageRes.text();
+  if (html.length > MAX_WATCH_PAGE_UNITS) {
+    throw new ExtractionError('YouTube returned an implausibly large video page.');
+  }
 
   const player = parsePlayerResponse(html);
   const tracks: CaptionTrack[] | undefined =
@@ -226,6 +264,10 @@ export async function fetchNativeCaptions(
     `Native captions: selected track lang=${track.languageCode ?? '?'} kind=${track.kind ?? 'manual'}`,
   );
 
+  if (!isAllowedCaptionHost(track.baseUrl as string)) {
+    throw new ExtractionError('This video\'s caption track URL was not a YouTube URL.');
+  }
+
   const xmlRes = await fetchImpl(track.baseUrl as string, {
     headers: BROWSER_HEADERS,
     signal: AbortSignal.timeout(CAPTION_XML_TIMEOUT_MS),
@@ -236,6 +278,9 @@ export async function fetchNativeCaptions(
     );
   }
   const xml = await xmlRes.text();
+  if (xml.length > MAX_CAPTION_XML_UNITS) {
+    throw new ExtractionError('YouTube returned an implausibly large caption track.');
+  }
 
   return parseCaptionXml(xml);
 }
