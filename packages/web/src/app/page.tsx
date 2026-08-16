@@ -384,6 +384,12 @@ export default function Home() {
                         onChange={(e) => setPastedTranscript(e.target.value)}
                         placeholder="Paste the video transcript here..."
                         rows={8}
+                        // Client-side mirror of the server's 500k-unit
+                        // transcript bound (CR-S7): stops a paste from
+                        // building a request the server would truncate or
+                        // reject anyway. The server-side cap remains the
+                        // authoritative enforcement.
+                        maxLength={500_000}
                         className="w-full p-3 bg-primary border border-border-subtle rounded-lg
                                    text-text-primary text-sm font-body resize-y
                                    focus:border-border-focus focus:outline-none"
@@ -417,10 +423,12 @@ export default function Home() {
               <div>
                 <div className="mb-8">
                   <p className="text-text-secondary text-sm mb-4 text-center">
-                    {fullSkillsCount} skills extracted.{' '}
+                    {fullSkillsCount} {fullSkillsCount === 1 ? 'skill' : 'skills'} extracted.{' '}
                     {signedIn
                       ? 'All unlocked.'
-                      : `1 unlocked, ${fullSkillsCount - 1} previewable.`}
+                      : fullSkillsCount === 1
+                        ? '1 unlocked.' // CR-S7: avoid "1 unlocked, 0 previewable"
+                        : `1 unlocked, ${fullSkillsCount - 1} previewable.`}
                     {!signedIn && (
                       <SignInButton mode="modal">
                         <button
