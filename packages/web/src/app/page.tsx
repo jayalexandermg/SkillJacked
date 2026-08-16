@@ -74,6 +74,10 @@ export default function Home() {
   const [activeSkillIndex, setActiveSkillIndex] = useState(0);
   const [format, setFormat] = useState<Format>('claude-skill');
   const [errorMessage, setErrorMessage] = useState('');
+  // The URL of the last attempted extraction, preserved so the manual-paste
+  // fallback can re-submit {url, rawTranscript} after a failure (SPEC-R1 §4.E3).
+  const [lastUrl, setLastUrl] = useState('');
+  const [pastedTranscript, setPastedTranscript] = useState('');
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -173,7 +177,7 @@ export default function Home() {
           : null
       : null;
 
-  const handleSubmit = useCallback(async (url: string) => {
+  const handleSubmit = useCallback(async (url: string, rawTranscript?: string) => {
     if (signedIn && usage?.tier !== 'pro' && usage?.remaining === 0) {
       setShowLimitModal(true);
       return;
@@ -181,9 +185,10 @@ export default function Home() {
 
     setState('loading');
     setErrorMessage('');
+    setLastUrl(url);
 
     try {
-      const data = await jackSkills(url);
+      const data = await jackSkills(url, rawTranscript);
 
       if (data.length === 0) {
         setErrorMessage(
@@ -196,6 +201,7 @@ export default function Home() {
       setRawSkills(data);
       setActiveSkillIndex(0);
       setState('preview');
+      setPastedTranscript('');
       setStoredExtraction(data, { pendingAnonymousImport: !signedIn });
 
       if (signedIn) {
@@ -232,6 +238,8 @@ export default function Home() {
     setRawSkills([]);
     setActiveSkillIndex(0);
     setErrorMessage('');
+    setLastUrl('');
+    setPastedTranscript('');
     clearStoredExtraction();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
@@ -365,6 +373,35 @@ export default function Home() {
               <div className="w-full max-w-2xl mx-auto text-center py-10">
                 <div className="p-6 bg-surface border border-error/30 rounded-lg">
                   <p className="text-error font-body mb-4">{errorMessage}</p>
+
+                  {lastUrl && (
+                    <div className="mt-2 mb-4 text-left">
+                      <p className="text-text-secondary text-sm mb-2">
+                        Have the transcript? Paste it below and we&apos;ll generate skills from it directly.
+                      </p>
+                      <textarea
+                        value={pastedTranscript}
+                        onChange={(e) => setPastedTranscript(e.target.value)}
+                        placeholder="Paste the video transcript here..."
+                        rows={8}
+                        className="w-full p-3 bg-primary border border-border-subtle rounded-lg
+                                   text-text-primary text-sm font-body resize-y
+                                   focus:border-border-focus focus:outline-none"
+                      />
+                      <button
+                        onClick={() => handleSubmit(lastUrl, pastedTranscript)}
+                        disabled={pastedTranscript.trim().length === 0}
+                        className={`mt-3 px-5 py-2.5 bg-accent text-primary font-body font-semibold text-sm
+                                   rounded-lg transition-all duration-200
+                                   ${pastedTranscript.trim().length === 0
+                                     ? 'opacity-50 cursor-not-allowed'
+                                     : 'hover:bg-accent-hover hover:gold-glow'}`}
+                      >
+                        Generate skills from pasted transcript
+                      </button>
+                    </div>
+                  )}
+
                   <button
                     onClick={handleReset}
                     className="text-text-secondary hover:text-text-primary text-sm
@@ -380,7 +417,10 @@ export default function Home() {
               <div>
                 <div className="mb-8">
                   <p className="text-text-secondary text-sm mb-4 text-center">
-                    {fullSkillsCount} skills extracted
+                    {fullSkillsCount} skills extracted.{' '}
+                    {signedIn
+                      ? 'All unlocked.'
+                      : `1 unlocked, ${fullSkillsCount - 1} previewable.`}
                     {!signedIn && (
                       <SignInButton mode="modal">
                         <button

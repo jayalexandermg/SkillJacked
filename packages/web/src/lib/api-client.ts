@@ -17,13 +17,17 @@ export interface SkillData {
 // surfaces as a clean error before the client's own wait gives up first.
 const JACK_TIMEOUT_MS = 285_000;
 
-export async function jackSkills(url: string): Promise<SkillData[]> {
+export async function jackSkills(url: string, rawTranscript?: string): Promise<SkillData[]> {
   let res: Response;
   try {
     res = await fetch('/api/jack', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, format: 'claude-skill' }),
+      body: JSON.stringify(
+        rawTranscript
+          ? { url, format: 'claude-skill', rawTranscript }
+          : { url, format: 'claude-skill' },
+      ),
       signal: AbortSignal.timeout(JACK_TIMEOUT_MS),
     });
   } catch (err) {
