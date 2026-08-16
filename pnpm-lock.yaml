@@ -51,9 +51,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.39.0
         version: 0.39.0
-      youtube-caption-extractor:
-        specifier: ^1.10.2
-        version: 1.10.2
+      youtube-transcript-plus:
+        specifier: ^2.0.1
+        version: 2.0.1
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -61,6 +61,9 @@ importers:
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(jiti@1.21.7)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -1554,6 +1557,10 @@ packages:
     resolution: {integrity: sha512-G/WSJStuTrWiqXZ5PpmMtS6LInCQueN/47lz5dNUnIPm7cRIX0RGI+fhkuNEipavQprQH6m2URBn5Xc0jhh1wA==}
     engines: {node: '>=18.0.0'}
 
+  youtube-transcript-plus@2.0.1:
+    resolution: {integrity: sha512-rU49uSbhRJzGNGtXCfx347W2xv7hJp+WDWCuY8rdA+AVcZACi6MnRuH+2JxyUpvtZOT/dayfA/9vs2r9Zr7BjQ==}
+    engines: {node: '>=20.0.0'}
+
 snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
@@ -2790,3 +2797,5 @@ snapshots:
     dependencies:
       he: 1.2.0
       striptags: 3.2.0
+
+  youtube-transcript-plus@2.0.1: {}

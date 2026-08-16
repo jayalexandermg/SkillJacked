@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jackSkills, SkillJackError } from '@skilljack/core';
+import { jackSkills, parseUrl, SkillJackError } from '@skilljack/core';
 import type { OutputFormat } from '@skilljack/core';
 import { auth } from '@clerk/nextjs/server';
 import { getSupabase } from '@/lib/supabase';
@@ -27,6 +27,25 @@ function getClientIp(request: NextRequest): string {
   );
 }
 
+// Best-effort title lookup for the manual-transcript path (SPEC-R1 §4.B3).
+// NEVER throws and NEVER fails the request — returns undefined on any
+// failure, letting the core fall back to a URL-derived title.
+const OEMBED_TIMEOUT_MS = 10_000;
+
+async function fetchTitleBestEffort(url: string): Promise<string | undefined> {
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+    const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(OEMBED_TIMEOUT_MS) });
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { title?: unknown };
+    return typeof data.title === 'string' && data.title.trim().length > 0
+      ? data.title
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
   const entry = rateLimitMap.get(ip);
@@ -40,8 +59,28 @@ function isRateLimited(ip: string): boolean {
   return entry.count > RATE_LIMIT;
 }
 
-// --- Fix 4: Request body size cap ---
-const MAX_BODY_BYTES = 1024; // 1KB — sufficient for URL + format
+// --- Fix 4: Request body size cap (two-tier, SPEC-R1 §4.B4) ---
+//
+// Unit note (CG-P2): both constants below are measured in UTF-16 CODE UNITS —
+// what String.prototype.length returns on the decoded body — NOT bytes.
+// rawBody is the decoded string, and code units are what every downstream
+// consumer of the string (JSON.parse, the word cap, the Claude prompt)
+// actually operates on. For ASCII content 1 code unit == 1 byte; non-ASCII
+// text can be up to 3x larger in UTF-8 bytes, so the true wire-size ceiling
+// is bounded by ~3x these values in the worst case. That looseness is
+// accepted: the constants exist to bound downstream work, and downstream
+// work is measured in code units.
+//
+// Tier 1 — hard read ceiling for every request, sized to the worst legitimate
+// transcript. Derivation: the pipeline caps transcripts at 50,000 words; at a
+// generous ~10 code units per word including whitespace that is ~500,000 code
+// units of transcript, plus JSON quoting/escape overhead and the url/format
+// fields. 640,000 code units gives that headroom without inviting abuse.
+const MAX_BODY_UNITS_HARD_CEILING = 640_000;
+// Tier 2 — requests WITHOUT rawTranscript keep (approximately) the original
+// 1KB-order bound, preserving the pre-existing hardening for the URL-only
+// request shape. Applied post-parse, once we know the request's shape.
+const MAX_BODY_UNITS_URL_ONLY = 2_048;
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,16 +93,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Cap request body size
+    // Tier 1: hard read ceiling (see unit note above — UTF-16 code units)
     const rawBody = await request.text();
-    if (rawBody.length > MAX_BODY_BYTES) {
+    if (rawBody.length > MAX_BODY_UNITS_HARD_CEILING) {
       return NextResponse.json(
         { error: 'Request body too large.' },
         { status: 413 }
       );
     }
 
-    let body: { url?: string; format?: string };
+    // Cheap pre-parse rejection for the URL-only shape (SPEC-R1 §4.H3c): a
+    // body that cannot contain a rawTranscript field has no business being
+    // large, so reject it before paying for a full JSON.parse of up to
+    // 640k units. The substring test is deliberately conservative — a body
+    // that mentions "rawTranscript" anywhere (even inside another field)
+    // passes through to the post-parse tier-2 check below, which remains
+    // authoritative. Same unit (UTF-16 code units) as the other caps.
+    if (rawBody.length > MAX_BODY_UNITS_URL_ONLY && !rawBody.includes('rawTranscript')) {
+      return NextResponse.json(
+        { error: 'Request body too large.' },
+        { status: 413 }
+      );
+    }
+
+    let body: { url?: string; format?: string; rawTranscript?: string };
     try {
       body = JSON.parse(rawBody);
     } catch {
@@ -72,12 +125,34 @@ export async function POST(request: NextRequest) {
 
     const { url, format: rawFormat } = body;
 
+    // A rawTranscript is "present" only when it is a non-empty string after
+    // trimming; anything else is treated as absent and the request behaves
+    // exactly like a URL-only request.
+    const hasRawTranscript =
+      typeof body.rawTranscript === 'string' && body.rawTranscript.trim().length > 0;
+
+    // Tier 2: post-parse cap for the URL-only shape (same unit as tier 1).
+    if (!hasRawTranscript && rawBody.length > MAX_BODY_UNITS_URL_ONLY) {
+      return NextResponse.json(
+        { error: 'Request body too large.' },
+        { status: 413 }
+      );
+    }
+
     if (!url || typeof url !== 'string') {
       return NextResponse.json(
         { error: 'A valid YouTube URL is required.' },
         { status: 400 }
       );
     }
+
+    // Validate URL SHAPE at the route boundary, before ANY outbound fetch
+    // (SPEC-R1 §4.H3b): a malformed URL costs a 400 here, not a 10s oEmbed
+    // round trip in fetchTitleBestEffort or a wasted trip into the pipeline.
+    // parseUrl throws ValidationError (a SkillJackError), which the catch
+    // block below maps to HTTP 400 with the honest message. Purely local
+    // validation — no network, no state.
+    parseUrl(url);
 
     const VALID_FORMATS: OutputFormat[] = ['claude-skill', 'cursor-rules', 'windsurf-rules'];
     const format: OutputFormat = VALID_FORMATS.includes(rawFormat as OutputFormat)
@@ -160,11 +235,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // --- Manual-transcript path (SPEC-R1 §4.B2/B3) ---
+    // Positioned AFTER the usage-enforcement block above (CG-P3): a request
+    // that would be quota-rejected never reaches this work. When a
+    // rawTranscript is present, ALL YouTube transcript fetching is bypassed
+    // (jackSkills skips extraction entirely); the title comes from a
+    // best-effort oEmbed lookup that can never fail the request — on any
+    // failure the core derives a URL-based title instead.
+    let rawTranscript: string | undefined;
+    let rawTranscriptTitle: string | undefined;
+    if (hasRawTranscript) {
+      rawTranscript = body.rawTranscript;
+      rawTranscriptTitle = await fetchTitleBestEffort(url);
+      console.log(
+        `[/api/jack] rawTranscript provided (${rawBody.length} body units); bypassing extraction`
+      );
+    }
+
     const results = await jackSkills(url, {
       format,
       apiKey,
       count: 10,
       concurrency: 3,
+      rawTranscript,
+      rawTranscriptTitle,
       extraction: {
         onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
         supadataApiKey: process.env.SUPADATA_API_KEY,
