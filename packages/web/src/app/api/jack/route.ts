@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jackSkills, SkillJackError } from '@skilljack/core';
+import { jackSkills, parseUrl, SkillJackError } from '@skilljack/core';
 import type { OutputFormat } from '@skilljack/core';
 import { auth } from '@clerk/nextjs/server';
 import { getSupabase } from '@/lib/supabase';
@@ -102,6 +102,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Cheap pre-parse rejection for the URL-only shape (SPEC-R1 §4.H3c): a
+    // body that cannot contain a rawTranscript field has no business being
+    // large, so reject it before paying for a full JSON.parse of up to
+    // 640k units. The substring test is deliberately conservative — a body
+    // that mentions "rawTranscript" anywhere (even inside another field)
+    // passes through to the post-parse tier-2 check below, which remains
+    // authoritative. Same unit (UTF-16 code units) as the other caps.
+    if (rawBody.length > MAX_BODY_UNITS_URL_ONLY && !rawBody.includes('rawTranscript')) {
+      return NextResponse.json(
+        { error: 'Request body too large.' },
+        { status: 413 }
+      );
+    }
+
     let body: { url?: string; format?: string; rawTranscript?: string };
     try {
       body = JSON.parse(rawBody);
@@ -131,6 +145,14 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Validate URL SHAPE at the route boundary, before ANY outbound fetch
+    // (SPEC-R1 §4.H3b): a malformed URL costs a 400 here, not a 10s oEmbed
+    // round trip in fetchTitleBestEffort or a wasted trip into the pipeline.
+    // parseUrl throws ValidationError (a SkillJackError), which the catch
+    // block below maps to HTTP 400 with the honest message. Purely local
+    // validation — no network, no state.
+    parseUrl(url);
 
     const VALID_FORMATS: OutputFormat[] = ['claude-skill', 'cursor-rules', 'windsurf-rules'];
     const format: OutputFormat = VALID_FORMATS.includes(rawFormat as OutputFormat)
