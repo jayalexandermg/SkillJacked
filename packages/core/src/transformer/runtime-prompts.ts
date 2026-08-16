@@ -30,7 +30,7 @@ Segmentation rules:
 - Segments must NOT overlap. allow_overlap is always false.
 - Use 0-based inclusive line indices from the transcript split by "\\n".
 - Keep segments reasonably sized. If a topic is too small (< min_lines), merge with a neighbor.
-- Prefer 6–12 segments max. If too many topics exist, merge the least actionable.
+- Adaptively segment based on content substance. Output anywhere from 2 to 10 segments. Never exceed 10 segments.
 - proposed_slug must be kebab-case [a-z0-9-], max 64 chars.
 - description must be third person, slightly pushy, and include: WHAT + WHEN + trigger words. Max 1024 chars.
 - evidence_quotes: 1–3 short verbatim quotes from within the segment.
