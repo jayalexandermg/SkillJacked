@@ -112,6 +112,8 @@ export { validateSkillMarkdown } from './transformer/validators/skill-md';
 export type { RawContent, ExtractionOptions } from './extractor/types';
 export type { StructuredSkill, SkillPlan, SkillSegment } from './transformer/types';
 export type { FormattedOutput, OutputFormat } from './formatter/types';
+export { evaluateSkill, EVAL_CRITERIA, tallyVerdicts } from './evaluator';
+export type { SkillEvalResult, EvaluateSkillInput, EvaluateSkillOpts, CriterionVerdict, EvalTally } from './evaluator';
 export { SkillJackError, ExtractionError, TransformError, ValidationError, SegmenterParseError } from './utils/errors';
 export type { TransformErrorDetails } from './utils/errors';
 export { withRetry, type RetryOpts } from './utils/retry';
