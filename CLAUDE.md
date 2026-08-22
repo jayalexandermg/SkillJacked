@@ -41,15 +41,15 @@ extract(url) → RawContent
 core/src/
   extractor/
     index.ts          — Entry: extract(url, options) → RawContent
-    youtube.ts        — YouTube transcript fetching via youtube-transcript-plus
-    fallbacks.ts      — VTT fallback extraction
+    youtube.ts        — Transcript acquisition; runs the 5-stage fallback chain
+    fallbacks.ts      — Supadata API, yt-dlp, Whisper ASR, metadata-only fallbacks
     vtt-parser.ts     — Parse .vtt subtitle files
     types.ts          — RawContent, ExtractionOptions
   transformer/
     index.ts          — transform(rawContent) → StructuredSkill (single-skill path)
     segmenter.ts      — segmentTranscript() — LLM call that splits transcript into skill topics
     skill-generator.ts — generateSkillsFromPlan() — concurrent per-segment LLM calls
-    skill-md.ts (validators/) — validateSkillMarkdown() — check output has required sections
+    validators/skill-md.ts — validateSkillMarkdown() — check output has required sections
     write-skill-pack.ts — Write skills + INDEX.md to disk
     normalize-transcript.ts — Pre-process transcript text before sending to LLM
     prompts.ts        — SKILL_EXTRACTION_PROMPT (v1 single-skill prompt)
@@ -67,6 +67,7 @@ core/src/
     concurrency.ts    — createLimiter() — cap concurrent API calls
     dedup.ts          — dedupSegments() — remove overlapping segments
     url-parser.ts     — parseUrl() — extract YouTube video ID
+    url-parser.test.ts — Unit tests for parseUrl()
 ```
 
 ### Key types
@@ -79,7 +80,7 @@ interface RawContent {
   duration: string;
   sourceUrl: string;
   platform: 'youtube';
-  transcriptMethod?: string;
+  transcriptMethod?: 'captions' | 'supadata' | 'yt-dlp' | 'whisper' | 'metadata';
 }
 
 // One segment identified by the segmenter
@@ -113,9 +114,37 @@ interface FormattedOutput {
 }
 ```
 
+### Transcript acquisition
+
+`extractYouTube()` walks a 5-stage fallback chain, taking the first stage that
+returns at least `MIN_TRANSCRIPT_WORDS`. Video metadata (title) is fetched first
+and a failure there aborts immediately with an `ExtractionError`.
+
+| Stage | Method | `transcriptMethod` | Requires |
+|-------|--------|--------------------|----------|
+| 1 | YouTube caption tracks (manual + auto/ASR) via `youtube-caption-extractor` | `captions` | — |
+| 2 | Supadata managed API (their own ASR for caption-less videos) | `supadata` | `SUPADATA_API_KEY` (skipped if unset) |
+| 3 | `yt-dlp` subtitle download, parsed by `vtt-parser.ts` | `yt-dlp` | `yt-dlp` on PATH |
+| 4 | Whisper transcription | `whisper` | `OPENAI_API_KEY` |
+| 5 | Video description / metadata only | `metadata` | — |
+
+Every stage — including stage 5 — is gated on the same minimum word count, so a
+video with no real spoken content fails loudly rather than producing one or two
+junk skills. `ExtractionOptions.skipFallbacks` stops the chain after stage 1
+(used where stages 3–4 can't run). Stage 3 and 4 shell out to local binaries and
+so are effectively no-ops on Vercel serverless; stages 1, 2, and 5 are the
+production path.
+
 ### LLM model
 
-All Claude calls use `claude-sonnet-4-20250514` with a 90-second timeout and up to 3 retries (exponential backoff with jitter). Retryable statuses: 429, 529, 5xx, timeout/abort.
+All Claude calls use `claude-sonnet-5` (the `ANTHROPIC_MODEL` constant, declared in both `segmenter.ts` and `skill-generator.ts`) with up to 3 retries (exponential backoff with jitter). Retryable statuses: 429, 529, 5xx, timeout/abort.
+
+Per-call abort budgets differ:
+
+| Call | Timeout | Notes |
+|------|---------|-------|
+| `segmentTranscript()` | 90s | Streamed with a large max-token budget so the JSON plan isn't truncated |
+| `generateSkillsFromPlan()` | 60s per segment | Runs at the configured concurrency |
 
 ---
 
@@ -123,15 +152,15 @@ All Claude calls use `claude-sonnet-4-20250514` with a 90-second timeout and up 
 
 **Binary:** `skilljacked` (published to npm as `skilljacked`)  
 **Entry:** `packages/cli/src/index.ts`  
-**Build tool:** tsup (ESM output, bundles `@skilljack/core`, externalizes `@anthropic-ai/sdk` and `youtube-transcript-plus`)
+**Build tool:** tsup (ESM output, bundles `@skilljack/core`, externalizes `@anthropic-ai/sdk` and `youtube-caption-extractor`)
 
 ### Commands
 
 | Command | Description |
 |---------|-------------|
 | `skilljacked <url>` | Fast-path: routes to `ingest --multi --max 10` |
-| `skilljacked ingest <url>` | v2 pipeline: segment → generate N skills |
-| `skilljacked ingest <url> --multi --max N` | Generate up to N skills (default preview = 3) |
+| `skilljacked ingest <url>` | v2 pipeline: segment → generate skills (preview mode: 3) |
+| `skilljacked ingest <url> --multi --max N` | Generate up to N skills (`--max` defaults to 12; >10 warns about overlap) |
 | `skilljacked ingest <url> --transcript-file <path>` | Use local transcript file instead of fetching |
 | `skilljacked jack <url>` | v1 pipeline: single skill extraction |
 | `skilljacked config set-key <key>` | Save Anthropic API key locally |
@@ -141,11 +170,14 @@ All Claude calls use `claude-sonnet-4-20250514` with a 90-second timeout and up 
 | `skilljacked doctor` | Check API key, config, dependencies |
 | `skilljacked library` | List saved skills |
 | `skilljacked open` | Open skills folder |
+| `skilljacked commands` | Show all available commands |
 | `skilljacked version` | Print CLI version |
 
 ### API key resolution
 
 `resolveApiKey()` in `utils/api-key.ts` — checks `ANTHROPIC_API_KEY` env var first, then falls back to the saved local config. Config stored using `env-paths` in a platform-appropriate user config directory.
+
+Other `ingest` flags: `--concurrency <n>` (default 1), `--retries <n>` (default 3), `--debug`, `-o, --output <dir>` (default `.`).
 
 ### Ingest command flow
 
@@ -177,7 +209,11 @@ web/src/
   app/
     page.tsx                    — Landing page (hero, URL input, skill preview)
     layout.tsx                  — Root layout with Clerk provider
+    opengraph-image.tsx         — Generated OG image
     dashboard/page.tsx          — Authenticated skill library
+    pricing/page.tsx            — Free / Pro pricing page
+    checkout/success/page.tsx   — Post-Stripe-checkout success
+    checkout/cancel/page.tsx    — Post-Stripe-checkout cancel
     sign-in/[[...sign-in]]/     — Clerk sign-in page
     sign-up/[[...sign-up]]/     — Clerk sign-up page
     api/
@@ -188,7 +224,8 @@ web/src/
       checkout/route.ts         — POST: create Stripe Checkout session
       billing/portal/route.ts   — POST: create Stripe Customer Portal session
       webhooks/clerk/route.ts   — POST: Clerk user lifecycle webhooks
-      webhooks/stripe/route.ts  — POST: Stripe payment webhooks
+      webhooks/stripe/route.ts  — POST: Stripe webhooks (checkout.session.completed,
+                                  customer.subscription.updated/deleted, invoice.paid)
   components/
     hero.tsx, url-input.tsx     — Landing page UI
     skill-card.tsx, skill-preview.tsx — Skill display
@@ -203,18 +240,21 @@ web/src/
     usage-tracker.ts — Jack usage counter
     api-client.ts  — Browser-side API fetch helpers
     client-formatter.ts — Client-side format conversion
+    client-skill-store.ts — Browser-side skill cache for the landing page
   middleware.ts    — Clerk auth middleware (protects /dashboard)
   styles/globals.css
 ```
 
 ### API: `/api/jack` (POST)
 
-Main extraction endpoint. Flow:
+Main extraction endpoint. `maxDuration = 280` (Vercel serverless budget covering the segmenter call plus up to 10 concurrent generations and one whole-pass retry).
+
+Flow:
 1. IP-based rate limiting (5 requests / 15 min per IP, in-memory)
 2. Body size cap (1 KB)
 3. Validate URL input and format
 4. If user is authenticated (Clerk): check monthly jack limit, return 402 if exceeded
-5. Run `jackSkills()` from `@skilljack/core` with `count: 10, concurrency: 3`
+5. Run `jackSkills()` from `@skilljack/core` with `count: 10, concurrency: 3`. If the first segment+generate pass yields zero skills, `jackSkills()` retries once with a fresh segmenter call
 6. If authenticated: increment `usage.jacks_used` in Supabase (non-fatal if this fails)
 7. Return array of `{ skill, formatted }` objects
 
@@ -225,7 +265,7 @@ users
   id              uuid (PK)
   clerk_id        text (unique)
   email           text
-  tier            text  ('free' | 'pro' | 'unlimited')
+  tier            text  ('free' | 'pro')
   stripe_customer_id  text (nullable)
   created_at      timestamptz
 
@@ -259,11 +299,12 @@ usage
 |------|-------------|
 | free | 3 |
 | pro  | 50 |
-| unlimited | ∞ (no limit check) |
+
+The limit is resolved as `tier === 'pro' ? 50 : 3` in `/api/jack` and `/api/usage`, with a per-row `usage.jacks_limit` override. There is no unlimited tier.
 
 ### Environment variables
 
-Copy `packages/web/env-template.txt` to `packages/web/.env.local`:
+`packages/web/env-template.txt` is a starting point but is not exhaustive — the full set the app reads is:
 
 ```
 # Clerk
@@ -271,6 +312,7 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+CLERK_WEBHOOK_SECRET=whsec_...
 
 # Anthropic
 ANTHROPIC_API_KEY=sk-ant-...
@@ -283,6 +325,14 @@ SUPABASE_SERVICE_ROLE_KEY=...
 STRIPE_SECRET_KEY=sk_live_... (or sk_test_...)
 STRIPE_WEBHOOK_SECRET=whsec_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
+STRIPE_PRO_PRICE_ID=price_...
+
+# Transcript fallbacks (optional — the chain degrades gracefully without them)
+SUPADATA_API_KEY=...
+OPENAI_API_KEY=sk-...     # Whisper ASR fallback
+
+# Misc
+NEXT_PUBLIC_APP_URL=https://skilljacked.com   # defaults to this if unset
 ```
 
 ---
@@ -408,7 +458,7 @@ Priority order for upcoming work:
 | 10 | Bulk Export | Planned |
 | 11 | Skill Editing | Planned |
 | 12 | Prompt Optimization | Planned |
-| 13 | Pricing Page | Planned |
+| 13 | Pricing Page | ✅ Done |
 | 14 | Account Settings | Planned |
 | 15–21 | ContentJacked, Universal Credits, Affiliates, Waitlist | Planned |
 
