@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { UserButton } from '@clerk/nextjs';
 import SkillCard from '@/components/skill-card';
+import ShareToggle from '@/components/share-toggle';
 import Footer from '@/components/footer';
 
 interface DbSkill {
@@ -14,6 +15,49 @@ interface DbSkill {
   source_url: string | null;
   format: string;
   created_at: string;
+  share_id?: string | null;
+  is_public?: boolean | null;
+}
+
+interface ExtractionGroup {
+  key: string;
+  shareId: string | null;
+  isPublic: boolean;
+  sourceTitle: string;
+  skills: DbSkill[];
+}
+
+/**
+ * Group skills into the extraction they came from. share_id is written per
+ * POST /api/skills, so it identifies one extraction.
+ *
+ * Skills saved before share ids existed have no share_id; they are grouped by
+ * source title so they still render, but they get no share control — there is
+ * no id to publish, and inventing one retroactively would let a single click
+ * publish content saved when sharing did not exist.
+ */
+function groupByExtraction(skills: DbSkill[]): ExtractionGroup[] {
+  const groups = new Map<string, ExtractionGroup>();
+
+  for (const skill of skills) {
+    const sourceTitle = skill.source_title || 'Untitled source';
+    const key = skill.share_id ?? `legacy:${sourceTitle}`;
+
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        key,
+        shareId: skill.share_id ?? null,
+        isPublic: Boolean(skill.is_public),
+        sourceTitle,
+        skills: [],
+      };
+      groups.set(key, group);
+    }
+    group.skills.push(skill);
+  }
+
+  return [...groups.values()];
 }
 
 interface UsageInfo {
@@ -100,21 +144,38 @@ export default function DashboardPage() {
             <UserButton />
           </div>
 
-          {/* Skills grid */}
+          {/* Skills grouped by extraction — the extraction is the shareable unit */}
           {skills.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {skills.map((skill) => (
-                <SkillCard
-                  key={skill.id}
-                  id={skill.id}
-                  name={skill.name}
-                  sourceTitle={skill.source_title ?? ''}
-                  generatedAt={skill.created_at}
-                  format={skill.format}
-                  content={skill.content}
-                  filename={`${skill.slug}.md`}
-                  onDelete={handleDelete}
-                />
+            <div className="space-y-10">
+              {groupByExtraction(skills).map((group) => (
+                <div key={group.key}>
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <h2 className="font-heading text-sm font-semibold text-text-secondary">
+                      {group.sourceTitle}
+                    </h2>
+                    {group.shareId && (
+                      <ShareToggle
+                        shareId={group.shareId}
+                        initialIsPublic={group.isPublic}
+                      />
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {group.skills.map((skill) => (
+                      <SkillCard
+                        key={skill.id}
+                        id={skill.id}
+                        name={skill.name}
+                        sourceTitle={skill.source_title ?? ''}
+                        generatedAt={skill.created_at}
+                        format={skill.format}
+                        content={skill.content}
+                        filename={`${skill.slug}.md`}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           ) : (

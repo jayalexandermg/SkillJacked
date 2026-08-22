@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getSupabase } from '@/lib/supabase';
+import { generateShareId } from '@/lib/share-id';
 
 // GET /api/skills — fetch all skills for the authenticated user
 export async function GET() {
@@ -80,6 +81,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No skills provided' }, { status: 400 });
   }
 
+  // One id per POST — every skill from a single extraction shares it, which is
+  // what /j/[shareId] resolves. Minted here rather than at share time so the
+  // link is stable, but is_public defaults to false, so minting it publishes
+  // nothing.
+  const shareId = generateShareId();
+
   const rows = skills.map((s) => ({
     user_id: user.id,
     name: s.name,
@@ -89,6 +96,7 @@ export async function POST(request: NextRequest) {
     source_url: s.source_url ?? null,
     source_video_id: s.source_video_id ?? null,
     format: s.format ?? 'claude-skill',
+    share_id: shareId,
   }));
 
   const { data, error } = await getSupabase()
@@ -101,5 +109,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to save skills' }, { status: 500 });
   }
 
-  return NextResponse.json({ saved: data });
+  return NextResponse.json({ saved: data, share_id: shareId });
 }
