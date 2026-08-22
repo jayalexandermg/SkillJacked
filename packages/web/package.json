@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "test": "tsx src/lib/share-id.test.ts",
+    "test": "tsx src/lib/share-id.test.ts && tsx src/lib/export-zip.test.ts",
     "build": "pnpm --filter @skilljack/core build && next build",
     "start": "next start"
   },
@@ -13,6 +13,7 @@
     "@skilljack/core": "workspace:*",
     "@supabase/supabase-js": "^2.101.1",
     "@vercel/kv": "^2.0.0",
+    "jszip": "^3.10.1",
     "next": "^16.1.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

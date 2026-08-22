@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { UserButton } from '@clerk/nextjs';
 import SkillCard from '@/components/skill-card';
 import ShareToggle from '@/components/share-toggle';
+import SkillEditModal from '@/components/skill-edit-modal';
+import { buildSkillsZip, downloadBlob } from '@/lib/export-zip';
 import Footer from '@/components/footer';
 
 interface DbSkill {
@@ -17,6 +19,7 @@ interface DbSkill {
   created_at: string;
   share_id?: string | null;
   is_public?: boolean | null;
+  is_edited?: boolean | null;
 }
 
 interface ExtractionGroup {
@@ -72,6 +75,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [zipping, setZipping] = useState(false);
+
+  const isPro = usage?.tier === 'pro';
 
   useEffect(() => {
     fetch('/api/usage')
@@ -102,8 +110,51 @@ export default function DashboardPage() {
     const res = await fetch(`/api/skills/${id}`, { method: 'DELETE' });
     if (res.ok) {
       setSkills((prev) => prev.filter((s) => s.id !== id));
+      setSelected((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allSelected = skills.length > 0 && selected.size === skills.length;
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(skills.map((s) => s.id)));
+  };
+
+  const downloadSelected = async () => {
+    setZipping(true);
+    try {
+      // Preserve library order rather than selection order, so the archive
+      // matches what the user sees on screen.
+      const chosen = skills.filter((s) => selected.has(s.id));
+      const blob = await buildSkillsZip(chosen);
+      downloadBlob(blob, `skilljacked-${chosen.length}-skills.zip`);
+    } catch (err) {
+      console.error('[export] Failed:', err);
+    } finally {
+      setZipping(false);
+    }
+  };
+
+  const applyEdit = (id: string, content: string, isEdited: boolean) => {
+    setSkills((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, content, is_edited: isEdited } : s)),
+    );
+  };
+
+  const editingSkill = skills.find((s) => s.id === editingId) ?? null;
 
   if (loading) {
     return (
@@ -144,6 +195,35 @@ export default function DashboardPage() {
             <UserButton />
           </div>
 
+          {/* Bulk export control. Shown to free users too, with an upgrade
+              prompt rather than a hidden feature. */}
+          {skills.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4
+                            border-b border-border-subtle">
+              {isPro ? (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4 accent-accent cursor-pointer"
+                  />
+                  <span className="font-body text-sm text-text-secondary">
+                    Select all ({skills.length})
+                  </span>
+                </label>
+              ) : (
+                <p className="font-body text-sm text-text-secondary">
+                  Bulk export is a{' '}
+                  <a href="/pricing" className="text-accent hover:text-accent-hover underline underline-offset-4">
+                    Pro feature
+                  </a>
+                  . Upgrade to select skills and download them as a zip.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Skills grouped by extraction — the extraction is the shareable unit */}
           {skills.length > 0 ? (
             <div className="space-y-10">
@@ -172,6 +252,10 @@ export default function DashboardPage() {
                         content={skill.content}
                         filename={`${skill.slug}.md`}
                         onDelete={handleDelete}
+                        isEdited={Boolean(skill.is_edited)}
+                        selected={selected.has(skill.id)}
+                        onToggleSelect={isPro ? toggleSelect : undefined}
+                        onEdit={isPro ? setEditingId : undefined}
                       />
                     ))}
                   </div>
@@ -266,6 +350,42 @@ export default function DashboardPage() {
           )}
         </div>
       </section>
+
+      {/* Floating selection bar */}
+      {isPro && selected.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4
+                        rounded-full border border-border-subtle bg-surface px-5 py-3 shadow-xl">
+          <span className="font-body text-sm text-text-secondary whitespace-nowrap">
+            {selected.size} selected
+          </span>
+          <button
+            onClick={downloadSelected}
+            disabled={zipping}
+            className={`px-4 py-2 bg-accent text-primary font-body font-semibold text-sm
+                       rounded-full hover:bg-accent-hover transition-all duration-200
+                       ${zipping ? 'opacity-60 cursor-wait' : ''}`}
+          >
+            {zipping ? 'Zipping...' : 'Download ZIP'}
+          </button>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="font-body text-sm text-text-tertiary hover:text-text-primary transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
+      {editingSkill && (
+        <SkillEditModal
+          id={editingSkill.id}
+          name={editingSkill.name}
+          content={editingSkill.content}
+          isEdited={Boolean(editingSkill.is_edited)}
+          onClose={() => setEditingId(null)}
+          onSaved={applyEdit}
+        />
+      )}
 
       <Footer />
     </main>
