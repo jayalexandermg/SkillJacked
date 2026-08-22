@@ -13,6 +13,12 @@ export default function Footer() {
 
         <div className="flex items-center gap-6">
           <a
+            href="/pricing"
+            className="text-text-secondary hover:text-text-primary text-sm transition-colors duration-200"
+          >
+            Pricing
+          </a>
+          <a
             href="https://github.com/jayalexandermg/SkillJacked"
             target="_blank"
             rel="noopener noreferrer"

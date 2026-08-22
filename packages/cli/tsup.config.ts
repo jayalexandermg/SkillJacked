@@ -6,7 +6,7 @@ export default defineConfig({
   dts: true,
   clean: true,
   noExternal: ['@skilljack/core'],
-  external: ['@anthropic-ai/sdk', 'youtube-transcript-plus'],
+  external: ['@anthropic-ai/sdk', 'youtube-caption-extractor'],
   banner: {
     js: '#!/usr/bin/env node',
   },

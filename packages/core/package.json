@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "youtube-transcript-plus": "^1.0.0"
+    "youtube-caption-extractor": "^1.10.2"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

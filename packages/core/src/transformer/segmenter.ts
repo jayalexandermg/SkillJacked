@@ -6,6 +6,7 @@ import { SegmenterParseError } from '../utils/errors';
 import { withRetry, type RetryOpts } from '../utils/retry';
 
 const ANTHROPIC_TIMEOUT_MS = 90_000;
+const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
 export interface SegmenterInput {
   title: string;
@@ -20,6 +21,7 @@ export interface SegmenterOpts {
   apiKey?: string;
   maxRetries?: number;
   onRetry?: (msg: string) => void;
+  onDebug?: (msg: string) => void;
 }
 
 function extractJSON(raw: string): string {
@@ -45,10 +47,17 @@ async function callClaude(
   system: string,
   userMessage: string,
 ): Promise<string> {
+  // Matches the proven pre-migration config (claude-sonnet-4-20250514,
+  // max_tokens 8192, no thinking, non-streaming) as closely as possible on
+  // the new model -- thinking is explicitly disabled rather than left to
+  // Sonnet 5's adaptive-by-default behavior, since that's new behavior this
+  // pipeline was never built or tuned against, and enabling it earlier
+  // didn't change the observed skill count at all.
   const response = await client.messages.create(
     {
-      model: 'claude-sonnet-4-20250514',
+      model: ANTHROPIC_MODEL,
       max_tokens: 8192,
+      thinking: { type: 'disabled' },
       system,
       messages: [{ role: 'user', content: userMessage }],
     },
@@ -58,8 +67,8 @@ async function callClaude(
   if (!response.content || response.content.length === 0) {
     throw new Error('Claude returned no content');
   }
-  const block = response.content[0];
-  if (block.type !== 'text') {
+  const block = response.content.find((b) => b.type === 'text');
+  if (!block) {
     throw new Error('Claude returned non-text content');
   }
   return block.text;
@@ -69,7 +78,7 @@ export async function segmentTranscript(
   input: SegmenterInput,
   opts: SegmenterOpts = {},
 ): Promise<SkillPlan> {
-  const { maxSegments = 12, minLines = 5, apiKey, maxRetries = 3, onRetry } = opts;
+  const { maxSegments = 12, minLines = 5, apiKey, maxRetries = 3, onRetry, onDebug } = opts;
   const client = new Anthropic({ apiKey });
   const retryOpts: RetryOpts = { maxRetries, onRetry };
 
@@ -103,7 +112,9 @@ export async function segmentTranscript(
 
   // First parse attempt
   try {
-    return parseSkillPlan(rawOutput);
+    const plan = parseSkillPlan(rawOutput);
+    onDebug?.(`Segmenter produced ${plan.segments.length} segment(s) (requested max ${maxSegments})`);
+    return plan;
   } catch {
     // Repair attempt
   }
@@ -127,7 +138,9 @@ export async function segmentTranscript(
   }
 
   try {
-    return parseSkillPlan(repairOutput);
+    const plan = parseSkillPlan(repairOutput);
+    onDebug?.(`Segmenter (after repair) produced ${plan.segments.length} segment(s) (requested max ${maxSegments})`);
+    return plan;
   } catch {
     throw new SegmenterParseError(
       'Failed to parse SkillPlan JSON after repair attempt',

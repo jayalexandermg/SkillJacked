@@ -35,6 +35,60 @@ async function commandExists(cmd: string): Promise<boolean> {
 }
 
 /**
+ * Stage 2: Fetch a transcript via the Supadata API. Covers auto-generated
+ * caption tracks the free scraper misses, and falls back to Supadata's own
+ * ASR pipeline on their end for videos with no captions at all -- same
+ * endpoint, same response shape, no yt-dlp/binary dependency, so this works
+ * unmodified on Vercel serverless. Returns null (never throws) if no API
+ * key is configured, so this stage is a no-op until SUPADATA_API_KEY is set.
+ */
+export async function fetchFromSupadata(
+  videoId: string,
+  apiKey: string,
+  onDebug?: DebugFn,
+): Promise<FallbackResult | null> {
+  try {
+    onDebug?.('Requesting transcript from Supadata...');
+    const res = await fetch(
+      `https://api.supadata.ai/v1/youtube/transcript?videoId=${encodeURIComponent(videoId)}`,
+      { headers: { 'x-api-key': apiKey }, signal: AbortSignal.timeout(30_000) },
+    );
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      onDebug?.(`Supadata request failed: ${res.status} ${body}`.substring(0, 150));
+      return null;
+    }
+
+    const data = (await res.json()) as {
+      content?: Array<{ text: string; offset: number; duration: number }>;
+    };
+
+    if (!data.content || data.content.length === 0) {
+      onDebug?.('Supadata returned no transcript content');
+      return null;
+    }
+
+    const transcript = data.content.map((seg) => seg.text).join('\n');
+    if (transcript.split(/\s+/).length < 20) {
+      onDebug?.('Supadata transcript too short');
+      return null;
+    }
+
+    const last = data.content[data.content.length - 1];
+    const durationSec = Math.ceil((last.offset + last.duration) / 1000);
+    const m = Math.floor(durationSec / 60);
+    const s = durationSec % 60;
+
+    onDebug?.(`Supadata transcript received (${transcript.split(/\s+/).length} words)`);
+    return { transcript, duration: `${m}:${s.toString().padStart(2, '0')}` };
+  } catch (err: any) {
+    onDebug?.(`Supadata request failed: ${err.message?.substring(0, 100) ?? err}`);
+    return null;
+  }
+}
+
+/**
  * Stage 2: Extract subtitles using yt-dlp.
  * Returns null if yt-dlp is not installed or no subtitles are available.
  */

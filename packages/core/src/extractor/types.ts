@@ -4,11 +4,12 @@ export interface RawContent {
   duration: string;
   sourceUrl: string;
   platform: 'youtube';
-  transcriptMethod?: 'captions' | 'yt-dlp' | 'whisper' | 'metadata';
+  transcriptMethod?: 'captions' | 'supadata' | 'yt-dlp' | 'whisper' | 'metadata';
 }
 
 export interface ExtractionOptions {
   onDebug?: (msg: string) => void;
   openaiApiKey?: string;
+  supadataApiKey?: string;
   skipFallbacks?: boolean;
 }

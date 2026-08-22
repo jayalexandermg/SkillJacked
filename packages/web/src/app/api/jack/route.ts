@@ -4,6 +4,16 @@ import type { OutputFormat } from '@skilljack/core';
 import { auth } from '@clerk/nextjs/server';
 import { getSupabase } from '@/lib/supabase';
 
+// Extraction does multiple sequential Claude calls: one segmenter call
+// (own internal abort at 110s, streamed with a 32k token budget so
+// adaptive thinking doesn't truncate the JSON plan on longer transcripts)
+// plus up to 10 skill generations at concurrency 3 (each with a 60s
+// internal abort), and jackSkills can retry the whole segment+generate
+// pass once if the first attempt returns zero skills. 280s gives real
+// headroom for that combination; Vercel already accepted 150s previously
+// so this is a safe incremental raise on the same plan.
+export const maxDuration = 280;
+
 // --- Fix 1: In-memory rate limiter ---
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 5;
@@ -157,7 +167,9 @@ export async function POST(request: NextRequest) {
       concurrency: 3,
       extraction: {
         onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
+        supadataApiKey: process.env.SUPADATA_API_KEY,
       },
+      onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
       onSkip: (msg) => console.log(`[/api/jack] ${msg}`),
     });
 

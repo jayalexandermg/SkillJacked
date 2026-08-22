@@ -9,6 +9,7 @@ logs/
 # Claude Code local settings
 .claude/settings.local.json
 .claude/data/
+**/.claude/data/
 
 # OS files
 .DS_Store
@@ -16,6 +17,10 @@ Thumbs.db
 
 # Temp/test files
 *.tmp
+.playwright-mcp/
+.tmp-chrome-anon/
+.tmp-chrome-anon.log
+SKILLJACKED_PREBUILD_CONTEXT.MD
 
 # IDE
 .vscode/
