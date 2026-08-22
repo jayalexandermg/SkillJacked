@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean"
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "test": "tsx src/utils/url-parser.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
