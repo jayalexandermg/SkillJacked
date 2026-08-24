@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same branch makes the in-flight run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # The Next.js build prerenders pages that mount Clerk's provider, which
+      # throws without a publishable key. These are well-formed dummies for a
+      # domain that does not exist -- they authenticate nothing and are not
+      # secrets. They exist so the build can be compiled and type-checked in
+      # CI; no test here talks to Clerk, Supabase, Stripe, or Anthropic.
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+      CLERK_SECRET_KEY: sk_test_ci_placeholder_not_a_real_key
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder
+      STRIPE_SECRET_KEY: sk_test_ci_placeholder
+      ANTHROPIC_API_KEY: sk-ant-ci-placeholder
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # --frozen-lockfile matches how Vercel installs. If a dependency was
+      # added without committing the lockfile, this fails here rather than at
+      # deploy time.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm -r build
+
+      - name: Test
+        run: pnpm -r test
+
+      # pnpm -r test exits 0 when no package defines a test script, so a repo
+      # that silently lost its tests would still report green. This asserts
+      # that at least one suite actually ran.
+      - name: Assert tests actually ran
+        run: |
+          output="$(pnpm -r test 2>&1)"
+          echo "$output"
+          if ! echo "$output" | grep -qE '[0-9]+ passed'; then
+            echo "::error::No test suite reported results — pnpm -r test ran nothing."
+            exit 1
+          fi
+
+      - name: Smoke test the CLI build
+        run: |
+          node packages/cli/dist/index.mjs --help > /dev/null
+          node packages/cli/dist/index.mjs -V > /dev/null
