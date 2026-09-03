@@ -219,7 +219,7 @@ web/src/
     api/
       jack/route.ts             — POST: extract skills from YouTube URL
       skills/route.ts           — GET: list user's skills
-      skills/[id]/route.ts      — GET/PUT/DELETE: single skill
+      skills/[id]/route.ts      — PATCH/DELETE: edit or delete a single skill
       usage/route.ts            — GET: current usage stats
       checkout/route.ts         — POST: create Stripe Checkout session
       billing/portal/route.ts   — POST: create Stripe Customer Portal session
