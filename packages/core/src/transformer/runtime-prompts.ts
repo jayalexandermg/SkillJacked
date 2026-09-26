@@ -63,13 +63,14 @@ ABSOLUTE RULES:
 7) INCLUDE ANTI-PATTERNS — "NEVER do X because Y."
 8) BE SPECIFIC — No vague summaries.
 9) PROGRESSIVE DISCLOSURE — Keep SKILL.md lean (<500 lines). If detailed references/scripts would help, include a short "Bundled Resources Plan" section listing file paths and purposes.
+10) NO PIPELINE LEAKS — The reader never sees the excerpt. NEVER mention "the excerpt", "this transcript", "this segment", or what the source did or didn't cover. If a step isn't supported by the excerpt, omit it silently instead of flagging the gap.
 
 OUTPUT FORMAT (strict):
 ---
 name: [kebab-case-skill-name]
 description: [Third person. What it does + when to trigger + trigger words/contexts. Max 1024 chars.]
 source: [Video title + URL]
-generated_by: SkillJack (skilljacked.com)
+generated_by: SkillJacked (skilljacked.com)
 ---
 
 # [Skill Name]
