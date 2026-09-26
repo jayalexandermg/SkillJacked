@@ -20,7 +20,7 @@ specs/      — Product specs and planning docs
   skills/   — Skill: /teamcheck
 ```
 
-Package manager: **pnpm** with workspaces (`pnpm-workspace.yaml`). All packages build to ESM.
+Package manager: **pnpm** with workspaces (`pnpm-workspace.yaml`). All packages build to ESM. CI and Vercel use pnpm 10; the workspace file also carries pnpm 11+'s `allowBuilds` so a fresh `npm i -g pnpm` (latest) can install too — keep `onlyBuiltDependencies` and `allowBuilds` in sync.
 
 ---
 
@@ -420,6 +420,10 @@ pnpm build
 # Build individual package
 cd packages/core && pnpm build
 cd packages/cli && pnpm build
+
+# CLI + core only — use this locally without web env vars (the web build
+# needs NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY to prerender and fails without it)
+pnpm --filter skilljacked... build
 
 # Web dev server
 cd packages/web && pnpm dev

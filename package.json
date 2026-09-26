@@ -10,8 +10,5 @@
   },
   "devDependencies": {
     "tsx": "^4.21.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "@clerk/shared"]
   }
 }
