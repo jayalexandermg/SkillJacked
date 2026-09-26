@@ -1,0 +1,414 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SkillJacked — promo</title>
+<style>
+@font-face { font-family: 'Syne'; src: url(data:font/woff2;base64,%%SYNE%%) format('woff2'); font-weight: 400 800; }
+@font-face { font-family: 'DM Sans'; src: url(data:font/woff2;base64,%%DMSANS%%) format('woff2'); font-weight: 100 1000; }
+@font-face { font-family: 'JetBrains Mono'; src: url(data:font/woff2;base64,%%JBMONO%%) format('woff2'); font-weight: 100 800; }
+
+html, body { margin: 0; padding: 0; background: #0a0a0f; overflow: hidden; }
+#stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0a0a0f; }
+canvas { position: absolute; left: 0; top: 0; }
+#world { position: absolute; left: 0; top: 0; width: 1440px; height: 2400px; transform-origin: 0 0; }
+.abs { position: absolute; }
+.syne { font-family: 'Syne', sans-serif; }
+.dm { font-family: 'DM Sans', sans-serif; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+#headline { left: 0; width: 1440px; text-align: center; font-size: 72px; font-weight: 700; line-height: 1.06; letter-spacing: -0.01em; color: #f8fafc; white-space: nowrap; }
+#headline div { display: block; }
+#headline .gold { color: #e0c866; text-shadow: 0 0 20px rgba(224,200,102,.5), 0 0 40px rgba(224,200,102,.2); }
+#subline { left: 0; width: 1440px; text-align: center; font-size: 20px; line-height: 1.6; color: #8a8a9a; white-space: nowrap; }
+#flipSlot { display: inline-block; position: relative; overflow: hidden; vertical-align: bottom; height: 32px; text-align: left; }
+#flipSlot span { position: absolute; left: 0; top: 0; white-space: nowrap; }
+
+#hero { box-sizing: border-box; border: 1.5px solid #e0c866; background: #141419; overflow: hidden; }
+#heroBar { left: 0; top: 0; width: 672px; height: 58px; display: flex; }
+#barInput { position: relative; flex: 1; height: 100%; font-size: 16px; color: #f8fafc; }
+#barPlaceholder, #barText { position: absolute; left: 20px; top: 0; line-height: 55px; white-space: pre; }
+#barPlaceholder { color: #5a5a6a; }
+#barSel { position: absolute; top: 15px; height: 25px; left: 18px; background: rgba(224,200,102,.3); border-radius: 2px; }
+#caret { position: absolute; top: 16px; width: 1.5px; height: 23px; background: #e0c866; }
+#barBtn { position: relative; width: 197px; height: 100%; background: #e0c866; color: #0a0a0f; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+#heroCard { left: 0; top: 0; width: 220px; height: 264px; }
+.skel { position: absolute; left: 35px; height: 9px; border-radius: 5px; background: rgba(224,200,102,.28); overflow: hidden; }
+.skel i { position: absolute; top: 0; bottom: 0; width: 120px; background: linear-gradient(90deg, rgba(240,216,118,0), rgba(240,216,118,.95), rgba(240,216,118,0)); }
+
+#rings { width: 440px; height: 440px; }
+#status { left: 0; width: 1440px; height: 40px; }
+#status span { position: absolute; left: 0; width: 1440px; text-align: center; font-size: 19px; color: #e0c866; white-space: nowrap; }
+
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" width="1920" height="1080"></canvas>
+  <div id="world">
+    <div id="headline" class="abs syne"><div>Stop watching.</div><div class="gold">Start doing.</div></div>
+    <div id="subline" class="abs dm">Bridging knowledge gaps &amp; turning <span id="flipSlot"><span id="flipA"></span><span id="flipB"></span></span></div>
+    <svg id="rings" class="abs" viewBox="0 0 440 440" fill="none">
+      <defs>
+        <linearGradient id="rgA" x1="0" y1="0" x2="440" y2="440" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#e0c866" stop-opacity="0"/><stop offset="50%" stop-color="#e0c866" stop-opacity=".9"/><stop offset="100%" stop-color="#c4a84d" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="rgB" x1="440" y1="0" x2="0" y2="440" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#c4a84d" stop-opacity="0"/><stop offset="50%" stop-color="#f0d876" stop-opacity=".7"/><stop offset="100%" stop-color="#e0c866" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <circle id="ringA" cx="220" cy="220" r="196" stroke="url(#rgA)" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="80 40 16 40 120 40 16 80"/>
+      <circle id="ringB" cx="220" cy="220" r="164" stroke="url(#rgB)" stroke-width="1" stroke-linecap="round" stroke-dasharray="20 28 8 28 60 28"/>
+    </svg>
+    <div id="hero" class="abs">
+      <div id="heroBar" class="abs dm">
+        <div id="barInput"><div id="barSel"></div><span id="barPlaceholder">Paste URL to get started</span><span id="barText"></span><div id="caret"></div></div>
+        <div id="barBtn"><svg width="14" height="22" viewBox="8 3 17 26"><path d="M18.5 3L8 18h6.5L12 29l13-16h-7.5z" fill="#0a0a0f"/></svg><span>Jack This Skill</span></div>
+      </div>
+      <div id="heroCard" class="abs">
+        <div class="skel" id="sk0" style="top:80px"><i></i></div>
+        <div class="skel" id="sk1" style="top:124px"><i></i></div>
+        <div class="skel" id="sk2" style="top:168px"><i></i></div>
+      </div>
+    </div>
+    <div id="status" class="abs dm"><span id="st0">Extracting transcript...</span><span id="st1">Analyzing frameworks...</span><span id="st2">Distilling techniques...</span></div>
+  </div>
+  <canvas id="fx" width="1920" height="1080"></canvas>
+  <canvas id="cur" width="1920" height="1080"></canvas>
+</div>
+
+<script>
+'use strict';
+// ─── Grid ────────────────────────────────────────────────────────────────
+const L = 32;                       // loop length (s): 16 bars at 120 BPM
+const BEAT = 0.5, BAR = 2;
+const bt = (bar, beat = 1, eighths = 0) => (bar - 1) * BAR + (beat - 1) * BEAT + eighths * 0.25;
+const ACCENT_BARS = new Set([3, 6, 9, 12]);
+
+// ─── Springs ─────────────────────────────────────────────────────────────
+// Closed-form damped step response, 0 → 1.
+function S(x, z, w) {
+  if (x <= 0) return 0;
+  if (z >= 1) return 1 - Math.exp(-w * x) * (1 + w * x);
+  const wd = w * Math.sqrt(1 - z * z);
+  return 1 - Math.exp(-z * w * x) * (Math.cos(wd * x) + (z * w / wd) * Math.sin(wd * x));
+}
+// keys: [[t, v], ...]; keys[0] is the resting value at loop start. Every value
+// must return to it by the loop's end, so the previous cycle's residual (the
+// S(t - ti + L) term) makes t = 0 and t = L identical in position and velocity.
+const TRACKS = [];
+function track(keys, z = 0.82, w = 18) {
+  const tr = { keys, z, w };
+  TRACKS.push(tr);
+  return (t) => {
+    let v = keys[0][1];
+    for (let i = 1; i < keys.length; i++) {
+      const d = keys[i][1] - keys[i - 1][1];
+      if (d === 0) continue;
+      const ti = keys[i][0];
+      v += d * (S(t - ti, z, w) + S(t - ti + L, z, w));
+    }
+    return v;
+  };
+}
+const fade = (keys, w = 14) => track(keys, 1, w);   // opacity / blur: critically damped
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const wrap = (x) => ((x % L) + L) % L;
+// Signed time since event e, wrapped into [-L/2, L/2).
+const since = (t, e) => { let d = wrap(t - e); return d >= L / 2 ? d - L : d; };
+
+// Seeded PRNG (mulberry32). Never Math.random() inside seek().
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let r = Math.imul(a ^ a >>> 15, 1 | a); r = r + Math.imul(r ^ r >>> 7, 61 | r) ^ r; return ((r ^ r >>> 14) >>> 0) / 4294967296; }; }
+
+// ─── Timeline ────────────────────────────────────────────────────────────
+const T = {
+  inputClick: bt(1, 2),
+  typeStart: bt(1, 2, 1),
+  btnEnable: bt(2, 3),
+  btnHover: bt(2, 4),
+  jack: bt(3, 1),
+  squeeze: bt(3, 2),
+  card: bt(3, 3),
+  rings: bt(3, 4),
+  split: bt(6, 1),
+  // Placeholders until Milestone 2 authors bars 6–16: everything folds back so
+  // the loop already closes.
+  foldBack: bt(14, 2),
+  landing: bt(14, 4),
+  select: bt(15, 2),
+  del: bt(15, 3),
+  btnDim: bt(15, 4),
+};
+const URL_TEXT = 'https://youtu.be/YuOSyRj3sXg';
+const CHAR_DT = 0.0625;                       // 32nd notes
+
+// Camera: world point at screen centre + scale.
+const camX = track([[0, 720], [T.foldBack, 720]], 0.86, 8);
+const camY = track([[0, 196], [T.btnEnable, 268], [T.squeeze, 352], [T.landing, 196]], 0.86, 8);
+const camS = track([[0, 1.95], [T.btnEnable, 2.1], [T.squeeze, 2.05], [bt(5, 3), 1.86], [T.landing, 1.95]], 0.86, 8);
+
+// Hero shape (world units, centre-anchored).
+const heroW = track([[0, 672], [T.squeeze, 330], [T.card, 220], [T.foldBack, 672]]);
+const heroH = track([[0, 58], [T.squeeze, 150], [T.card, 264], [T.foldBack, 58]]);
+const HERO_Y = 320;
+const heroY = () => HERO_Y;
+const heroR = track([[0, 14], [T.squeeze, 20], [T.card, 24], [T.foldBack, 14]]);
+const heroSquash = track([[0, 1], [bt(5, 4), 0.95], [T.split, 1]], 0.7, 20);
+const barContent = fade([[0, 1], [T.jack + 0.06, 0], [T.landing, 1]], 16);
+const cardContent = fade([[0, 0], [T.card, 1], [T.split, 0]], 14);
+const skelW = [0, 1, 2].map((i) => track([[0, 0], [bt(4, 1 + i), 1], [T.split, 0]]));
+const SKEL_W = [150, 150, 92];
+
+const heroGlowBase = fade([[0, 0.55], [T.jack, 1], [T.landing, 0.55]], 6);
+const charge = fade([[0, 0], [bt(4, 4), 1], [bt(5, 1), 0]], 12);
+const headline = fade([[0, 1], [T.jack, 0], [T.landing, 1]], 14);
+const ringsO = fade([[0, 0], [T.rings, 1], [T.split, 0]], 10);
+
+// Input + button.
+const focus = fade([[0, 0], [T.inputClick, 1], [T.jack, 0], [T.select - 0.25, 1], [T.btnDim, 0]], 20);
+const btnO = fade([[0, 0.5], [T.btnEnable, 1], [T.btnDim, 0.5]], 16);
+const btnHover = fade([[0, 0], [T.btnHover, 1], [T.jack + 0.25, 0]], 20);
+const btnPress = track([[0, 1], [T.jack, 0.95], [T.jack + 0.12, 1]], 0.72, 40);
+const selO = fade([[0, 0], [T.select, 1], [T.del, 0]], 30);
+
+// Status lines: each enters and exits on its own timing so swaps never overlap.
+const STATUS = [[T.card, bt(4, 1)], [bt(4, 1), bt(5, 1)], [bt(5, 1), T.split]];
+function presence(t, tin, tout, w = 16) {
+  const a = S(t - tin - 0.08, 1, w), b = S(t - tout, 1, w * 1.4);
+  return { o: a - b, enter: a, exit: b };
+}
+
+// Ambient (screen space).
+const ambient = fade([[0, 0.55], [T.jack, 1], [bt(7, 1), 0.15], [T.landing, 0.55]], 4);
+
+// Cursor (screen space). Moves start ~0.32 s before their beat.
+const REST = [1478, 884];
+let cursorX, cursorY;
+const CLICKS = [T.inputClick, T.jack];
+const pressT = track([[0, 1], ...CLICKS.flatMap((c) => [[c - 0.02, 0.84], [c + 0.1, 1]])], 0.8, 34);
+
+// ─── DOM refs ────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const E = {
+  world: $('world'), headline: $('headline'), subline: $('subline'), flipA: $('flipA'), flipB: $('flipB'), flipSlot: $('flipSlot'),
+  hero: $('hero'), heroBar: $('heroBar'), heroCard: $('heroCard'), barText: $('barText'), barPlaceholder: $('barPlaceholder'),
+  caret: $('caret'), barSel: $('barSel'), barBtn: $('barBtn'), rings: $('rings'), ringA: $('ringA'), ringB: $('ringB'),
+  status: $('status'), st: [$('st0'), $('st1'), $('st2')], sk: [$('sk0'), $('sk1'), $('sk2')],
+};
+const bg = $('bg').getContext('2d'), fx = $('fx').getContext('2d'), cur = $('cur').getContext('2d');
+const ARROW = new Path2D('M0 0 L0 24 L6.2 18.2 L10.6 28 L14.6 26.3 L10.3 16.8 L18.6 16.8 Z');
+const SUBFRAME = 1 / 480;   // one render subframe
+let charX = [];   // measured x offset of each typed character
+
+function camera(t) { return { x: camX(t), y: camY(t), s: camS(t) }; }
+function w2s(wx, wy, t) { const c = camera(t); return [(wx - c.x) * c.s + 960, (wy - c.y) * c.s + 540]; }
+
+function init() {
+  // Measure typed-text caret positions once (deterministic after fonts load).
+  const probe = document.createElement('span');
+  probe.className = 'dm'; probe.style.cssText = 'position:absolute;visibility:hidden;font-size:16px;white-space:pre';
+  document.body.appendChild(probe);
+  for (let i = 0; i <= URL_TEXT.length; i++) { probe.textContent = URL_TEXT.slice(0, i); charX.push(probe.getBoundingClientRect().width); }
+  probe.remove();
+  E.flipA.textContent = 'education';
+  const m = document.createElement('span'); m.className = 'dm'; m.style.cssText = 'position:absolute;visibility:hidden;font-size:20px;font-weight:500';
+  document.body.appendChild(m);
+  E.flipSlot.style.width = Math.max(...['education', 'into', 'execution'].map((w) => { m.textContent = w; return m.getBoundingClientRect().width; })) + 2 + 'px';
+  m.remove();
+
+  // Cursor path, resolved against the camera at each arrival time.
+  const inputPt = w2s(720 - 336 + 20 + 128, HERO_Y + 2, T.inputClick);
+  const btnPt = w2s(720 + 336 - 92, HERO_Y + 6, T.jack);
+  const keysX = [[0, REST[0]], [T.inputClick - 0.32, inputPt[0]], [T.btnHover - 0.32, btnPt[0]], [T.squeeze + 0.1, 1490], [T.select - 0.32, 1490], [bt(16, 2) - 0.32, REST[0]]];
+  const keysY = [[0, REST[1]], [T.inputClick - 0.32, inputPt[1]], [T.btnHover - 0.32, btnPt[1]], [T.squeeze + 0.1, 900], [T.select - 0.32, 900], [bt(16, 2) - 0.32, REST[1]]];
+  cursorX = track(keysX, 0.9, 15);
+  cursorY = track(keysY, 0.9, 15);
+  verifyTracks();
+}
+
+function verifyTracks() {
+  const bad = TRACKS.filter((tr) => Math.abs(tr.keys[tr.keys.length - 1][1] - tr.keys[0][1]) > 1e-9);
+  if (bad.length) throw new Error(bad.length + ' track(s) do not return to their start value — loop would break');
+}
+
+// ─── seek(t): the only place styles are written ──────────────────────────
+function seek(tIn) {
+  const t = wrap(tIn);
+  const cam = camera(t);
+  E.world.style.transform = `translate(960px,540px) scale(${cam.s}) translate(${-cam.x}px,${-cam.y}px)`;
+
+  // Metronome: every bar downbeat lands on the hero; accents on key clicks.
+  let pulse = 0;
+  for (let b = 1; b <= 16; b++) {
+    const d = since(t, bt(b));
+    if (d >= 0) pulse += (ACCENT_BARS.has(b) ? 1 : 0.5) * Math.exp(-d / 0.32);
+    else if (d > -0.06) pulse += (ACCENT_BARS.has(b) ? 1 : 0.5) * (1 + d / 0.06) * 0.35;
+  }
+
+  // Headline / subline.
+  const ho = headline(t);
+  E.headline.style.cssText = `top:${34 - (1 - ho) * 14}px;opacity:${ho};filter:blur(${(1 - ho) * 10}px)`;
+  E.subline.style.cssText = `top:204px;opacity:${ho};filter:blur(${(1 - ho) * 8}px)`;
+  E.flipA.style.cssText = 'color:#e0c866;font-weight:500';
+
+  // Hero shape.
+  const sq = heroSquash(t);
+  const hw = heroW(t) * sq, hh = heroH(t) * sq, hy = heroY(t), hr = heroR(t);
+  const g = heroGlowBase(t) * (0.35 + 0.65 * Math.min(1.4, pulse)) + charge(t) * 0.8;
+  // Small crisp rim here; the wide glow is drawn on the background canvas —
+  // large box-shadows on camera-scaled elements clip at GPU tile edges.
+  E.hero.style.cssText = `left:${720 - hw / 2}px;top:${hy - hh / 2}px;width:${hw}px;height:${hh}px;border-radius:${hr}px;` +
+    `box-shadow:0 0 ${3 + 5 * g}px rgba(224,200,102,${0.2 + 0.3 * g})`;
+
+  // Bar content, laid out at bar size and centred inside the morphing shape.
+  const bo = barContent(t);
+  E.heroBar.style.cssText = `left:${hw / 2 - 336}px;top:${hh / 2 - 29}px;opacity:${bo};filter:blur(${(1 - bo) * 8}px)`;
+  const typed = t < T.typeStart ? 0 : t >= T.del ? 0 : clamp(Math.floor((t - T.typeStart) / CHAR_DT) + 1, 0, URL_TEXT.length);
+  E.barText.textContent = URL_TEXT.slice(0, typed);
+  E.barPlaceholder.style.opacity = typed === 0 ? 1 : 0;
+  const f = focus(t);
+  const typing = t >= T.typeStart && t < T.typeStart + URL_TEXT.length * CHAR_DT + 0.1;
+  const blinkOn = typing || (t * 2) % 1 < 0.5;
+  E.caret.style.cssText = `left:${20 + charX[typed]}px;opacity:${f > 0.5 && blinkOn ? f : 0}`;
+  const so = selO(t);
+  E.barSel.style.cssText = `width:${charX[URL_TEXT.length] + 4}px;opacity:${so * (typed ? 1 : 0)}`;
+  const bh = btnHover(t);
+  const bc = [lerp(224, 240, bh), lerp(200, 216, bh), lerp(102, 118, bh)].map(Math.round);
+  E.barBtn.style.cssText = `opacity:${btnO(t)};background:rgb(${bc});transform:scale(${btnPress(t)});` +
+    `box-shadow:0 0 ${10 * bh}px rgba(224,200,102,${0.3 * bh}),0 0 ${40 * bh}px rgba(224,200,102,${0.15 * bh})`;
+  E.hero.style.borderColor = `rgba(${lerp(224, 240, f * 0.6)},${lerp(200, 216, f * 0.6)},${lerp(102, 118, f * 0.6)},1)`;
+
+  // Card content: skeleton lines drawing in, shimmer sweeping once per bar.
+  const co = cardContent(t);
+  E.heroCard.style.cssText = `left:${hw / 2 - 110}px;top:${hh / 2 - 132}px;opacity:${co};filter:blur(${(1 - co) * 6}px)`;
+  const sweep = (wrap(t) % BAR) / BAR;
+  E.sk.forEach((el, i) => {
+    const k = skelW[i](t);
+    el.style.width = `${Math.max(0, SKEL_W[i] * k)}px`;
+    el.firstChild.style.left = `${-120 + sweep * 300 - i * 18}px`;
+  });
+
+  // Energy rings behind the card (loop-safe periods: 8 s and 6.4 s divide 32 s).
+  const ro = ringsO(t);
+  E.rings.style.cssText = `left:${720 - 220}px;top:${hy - 220}px;opacity:${ro}`;
+  E.ringA.setAttribute('transform', `rotate(${(t / 8) * 360} 220 220)`);
+  E.ringB.setAttribute('transform', `rotate(${-(t / 6.4) * 360} 220 220)`);
+
+  // Status copy (real product strings, one per bar like the product's 2 s cadence).
+  E.status.style.top = `${hy + 214}px`;
+  E.st.forEach((el, i) => {
+    const p = presence(t, STATUS[i][0], STATUS[i][1]);
+    el.style.cssText = `top:${(1 - p.enter) * 10 - p.exit * 10}px;opacity:${p.o};filter:blur(${(1 - p.o) * 6}px)`;
+  });
+
+  // Hero in screen space (particles + glow field target it).
+  const [sx, sy] = w2s(720, hy, t);
+  const shw = hw * cam.s / 2, shh = hh * cam.s / 2;
+  drawBackground(t, sx, sy, pulse, shw, shh, hr * cam.s, g);
+  drawParticles(t, sx, sy, shw, shh);
+
+  // Cursor + click ripples (screen space, never scaled by the camera).
+  drawCursor(t);
+  for (const c of CLICKS) {
+    const d = since(t, c);
+    if (d < 0 || d > 0.6) continue;
+    const k = S(d, 1, 12);
+    fx.beginPath(); fx.arc(cursorX(c), cursorY(c), 6 + 34 * k, 0, Math.PI * 2);
+    fx.strokeStyle = `rgba(224,200,102,${(1 - k) * 0.9})`; fx.lineWidth = 2; fx.stroke();
+  }
+}
+
+// Cursor motion blur: average N positions across this subframe's slot with
+// additive compositing at 1/N alpha (an exact premultiplied average), so fast
+// moves blend instead of strobing. Still a pure function of t.
+const SPRITE = document.createElement('canvas');
+SPRITE.width = 64; SPRITE.height = 72;
+{
+  const c = SPRITE.getContext('2d');
+  c.translate(8, 6); c.scale(1.5, 1.5);
+  c.shadowColor = 'rgba(0,0,0,0.45)'; c.shadowBlur = 6; c.shadowOffsetY = 2;
+  c.fillStyle = '#f8fafc'; c.fill(ARROW);
+  c.shadowColor = 'transparent';
+  c.lineWidth = 1.6; c.lineJoin = 'round'; c.strokeStyle = '#0a0a0f'; c.stroke(ARROW);
+}
+function drawCursor(t) {
+  cur.clearRect(0, 0, 1920, 1080);
+  const d = Math.hypot(cursorX(t - SUBFRAME) - cursorX(t), cursorY(t - SUBFRAME) - cursorY(t));
+  const n = clamp(Math.ceil(d / 1.2), 1, 16);
+  cur.save();
+  cur.globalCompositeOperation = 'lighter';
+  cur.globalAlpha = 1 / n;
+  for (let i = 0; i < n; i++) {
+    const tt = t - (SUBFRAME * i) / n;
+    const sc = pressT(tt);
+    cur.setTransform(sc, 0, 0, sc, cursorX(tt), cursorY(tt));
+    cur.drawImage(SPRITE, -8, -6);
+  }
+  cur.restore();
+}
+
+function drawBackground(t, sx, sy, pulse, hw, hh, rad, g) {
+  bg.clearRect(0, 0, 1920, 1080);
+  bg.fillStyle = '#0a0a0f'; bg.fillRect(0, 0, 1920, 1080);
+  const a = ambient(t);
+  const breathe = 0.5 + 0.5 * Math.cos(((t % BAR) / BAR) * Math.PI * 2);
+  const r = 620 + 60 * breathe;
+  const grd = bg.createRadialGradient(sx, sy, 0, sx, sy, r);
+  grd.addColorStop(0, `rgba(224,200,102,${(0.05 + 0.035 * Math.min(1, pulse)) * a})`);
+  grd.addColorStop(1, 'rgba(224,200,102,0)');
+  bg.fillStyle = grd; bg.fillRect(0, 0, 1920, 1080);
+  // Hero glow: two soft passes, intensity follows the metronome.
+  for (const [blur, alpha] of [[40 + 50 * g, 0.1 + 0.3 * g], [110 + 130 * g, 0.05 + 0.14 * g]]) {
+    bg.save();
+    bg.shadowColor = `rgba(224,200,102,${Math.min(1, alpha)})`; bg.shadowBlur = blur;
+    bg.fillStyle = '#141419';
+    bg.beginPath(); bg.roundRect(sx - hw, sy - hh, hw * 2, hh * 2, Math.min(rad, hw, hh)); bg.fill();
+    bg.restore();
+  }
+}
+
+// Waves of gold particles land on the hero's edge on every downbeat.
+const WAVES = [];
+for (let b = 1; b <= 16; b++) {
+  const r = rng(b * 7919);
+  const n = ACCENT_BARS.has(b) ? 24 : 10;
+  const ps = [];
+  for (let j = 0; j < n; j++) {
+    const ang = r() * Math.PI * 2;
+    ps.push({ ang, r0: 360 + r() * 220, dur: 0.9 + r() * 0.6, size: r() < 0.2 ? 4.5 : r() < 0.5 ? 3.2 : 2.2,
+      col: j % 3 === 0 ? [224, 200, 102] : j % 3 === 1 ? [196, 168, 77] : [248, 250, 252], lag: r() * 0.08 });
+  }
+  WAVES.push({ t: bt(b), ps });
+}
+function drawParticles(t, sx, sy, hw, hh) {
+  fx.clearRect(0, 0, 1920, 1080);
+  const a = ambient(t);
+  if (a < 0.01) return;
+  for (const wv of WAVES) {
+    for (const p of wv.ps) {
+      const arrive = wv.t - p.lag;
+      const d = since(t, arrive);
+      if (d < -p.dur || d > 0.12) continue;
+      const u = clamp((d + p.dur) / p.dur, 0, 1);
+      const e = Math.pow(u, 2.3);
+      const dx = Math.cos(p.ang), dy = Math.sin(p.ang);
+      const kEdge = Math.min(hw / Math.max(1e-6, Math.abs(dx)), hh / Math.max(1e-6, Math.abs(dy)));
+      const ex = sx + dx * kEdge, ey = sy + dy * kEdge;
+      const x = ex + dx * p.r0 * (1 - e), y = ey + dy * p.r0 * (1 - e);
+      const o = (d > 0 ? 1 - d / 0.12 : Math.min(1, u / 0.18)) * a;
+      fx.beginPath(); fx.arc(x, y, p.size * (d > 0 ? 1 + d * 6 : 1), 0, Math.PI * 2);
+      fx.fillStyle = `rgba(${p.col},${o})`;
+      fx.shadowColor = `rgba(${p.col},${o})`; fx.shadowBlur = 8;
+      fx.fill();
+    }
+  }
+  fx.shadowBlur = 0;
+}
+
+window.seek = seek;
+window.PROMO = { L, bt, T };
+document.fonts.ready.then(() => { init(); seek(0); window.READY = true; });
+</script>
+</body>
+</html>
