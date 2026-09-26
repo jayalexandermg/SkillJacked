@@ -210,17 +210,21 @@ web/src/
     page.tsx                    — Landing page (hero, URL input, skill preview)
     layout.tsx                  — Root layout with Clerk provider
     opengraph-image.tsx         — Generated OG image
-    dashboard/page.tsx          — Authenticated skill library
+    dashboard/page.tsx          — Authenticated skill library (grouping, sharing, bulk export, editing)
+    settings/page.tsx           — Account settings: plan, usage, billing portal, sign out
     pricing/page.tsx            — Free / Pro pricing page
     checkout/success/page.tsx   — Post-Stripe-checkout success
     checkout/cancel/page.tsx    — Post-Stripe-checkout cancel
     sign-in/[[...sign-in]]/     — Clerk sign-in page
     sign-up/[[...sign-up]]/     — Clerk sign-up page
+    j/[shareId]/page.tsx        — Public, unauthenticated permalink for one shared extraction
     api/
       jack/route.ts             — POST: extract skills from YouTube URL
-      skills/route.ts           — GET: list user's skills
-      skills/[id]/route.ts      — PATCH/DELETE: edit or delete a single skill
+      skills/route.ts           — GET: list user's skills; POST: save skills (mints share_id)
+      skills/[id]/route.ts      — DELETE: remove a skill; PATCH: edit content or reset (Pro-only)
+      share/route.ts            — POST: publish/unpublish an extraction (sets is_public)
       usage/route.ts            — GET: current usage stats
+      account/route.ts          — GET: plan, price, renewal date, usage, library count for /settings
       checkout/route.ts         — POST: create Stripe Checkout session
       billing/portal/route.ts   — POST: create Stripe Customer Portal session
       webhooks/clerk/route.ts   — POST: Clerk user lifecycle webhooks
@@ -229,6 +233,8 @@ web/src/
   components/
     hero.tsx, url-input.tsx     — Landing page UI
     skill-card.tsx, skill-preview.tsx — Skill display
+    skill-edit-modal.tsx        — Edit one skill's content (Pro-only; textarea, save/reset)
+    share-toggle.tsx            — Publish/unpublish + copy-link control for one extraction
     format-toggle.tsx           — Claude/Cursor/Windsurf format switcher
     download-bar.tsx, loading-state.tsx
     how-it-works.tsx, install-guide.tsx
@@ -241,7 +247,11 @@ web/src/
     api-client.ts  — Browser-side API fetch helpers
     client-formatter.ts — Client-side format conversion
     client-skill-store.ts — Browser-side skill cache for the landing page
-  middleware.ts    — Clerk auth middleware (protects /dashboard)
+    share-id.ts     — generateShareId() / isValidShareId() — 10-char, 64-symbol, 60-bit ids
+    share-id.test.ts — Unit tests for share-id.ts
+    export-zip.ts    — resolveFilenames() / buildSkillsZip() / downloadBlob() — client-side ZIP export
+    export-zip.test.ts — Unit tests for export-zip.ts
+  middleware.ts    — Clerk auth middleware (protects /dashboard, /settings)
   styles/globals.css
 ```
 
@@ -258,6 +268,55 @@ Flow:
 6. If authenticated: increment `usage.jacks_used` in Supabase (non-fatal if this fails)
 7. Return array of `{ skill, formatted }` objects
 
+### Public share links (`/j/[shareId]`)
+
+Every `POST /api/skills` call mints one `share_id` (via `lib/share-id.ts`, 10 chars from a
+64-symbol alphabet, 60 bits of entropy) shared by every skill row from that extraction —
+`skills` has no separate batch/extraction table, so `share_id` is how one extraction's rows
+are grouped, both on the dashboard and for sharing. Minting is unconditional; it does not by
+itself publish anything.
+
+Extractions are **private by default**. `POST /api/share` (auth required) is the only thing
+that ever sets `is_public true`, scoped to `share_id AND user_id` so one user's share id
+cannot be used to toggle another user's extraction — the Supabase client uses the service-role
+key and bypasses RLS, so ownership is enforced in the query itself. `dashboard/page.tsx` groups
+skills by `share_id` (legacy rows saved before this shipped have none, and get no share
+control) and renders `<ShareToggle>` per group.
+
+`GET /j/[shareId]` (public page, no auth) looks up rows by `share_id AND is_public = true` in
+one query — an id that doesn't exist and one that exists but isn't public both 404 identically,
+so probing ids reveals nothing. It renders in partial-preview mode with a sign-up CTA, generates
+OG/Twitter metadata from the source video, and is dynamically rendered (no caching) so unsharing
+takes effect immediately.
+
+### Skill editing & bulk export (Pro)
+
+`PATCH /api/skills/:id` (`skill-edit-modal.tsx`) edits one skill's `content`, gated on
+`tier === 'pro'` read from Supabase (the Stripe webhook's write target, and the only source of
+truth for tier — never Clerk metadata). The pre-edit text is captured into `original_content`
+on the *first* edit only, so a second edit doesn't overwrite it as "previous version" — this is
+what makes `{ reset: true }` restore the originally generated skill rather than the last edit.
+`is_edited` and `updated_at` are stamped on every write.
+
+Bulk export is entirely client-side: `lib/export-zip.ts` builds a ZIP in the browser
+(`buildSkillsZip()`, dynamic `jszip` import) from skills already in memory on the dashboard —
+no server route, since uploading content only to receive it back would waste the serverless
+budget. `resolveFilenames()` suffixes colliding `slug + format` pairs so a zip never silently
+drops a same-named file. Both features are Pro-gated in `dashboard/page.tsx`'s UI (selection
+checkboxes and the edit button are only wired up when `tier === 'pro'`); free users see an
+upgrade prompt in place of the bulk-export control.
+
+### Account settings (`/settings`)
+
+`GET /api/account` (auth required) returns plan, live Stripe price and renewal date (Pro only,
+and only when `stripe_customer_id` is set — free users never touch Stripe), current-period jack
+usage, and library skill count in one round trip. `current_period_end` is read from the
+subscription item first (Stripe moved it there from the subscription object), falling back to
+the subscription-level field. A Stripe failure degrades to a missing renewal date rather than
+failing the page, since tier itself already comes from Supabase. The page reuses the existing
+`/api/billing/portal` route rather than a separate one, and has no library cap — none is
+enforced anywhere in the codebase.
+
 ### Database schema (Supabase)
 
 ```
@@ -270,19 +329,22 @@ users
   created_at      timestamptz
 
 skills
-  id              uuid (PK)
-  user_id         uuid (FK → users.id)
-  name            text
-  slug            text
-  description     text
-  content         text
-  source_title    text
-  source_url      text
-  source_video_id text
-  format          text  ('claude-skill' | 'cursor-rules' | 'windsurf-rules')
-  is_edited       boolean
-  created_at      timestamptz
-  updated_at      timestamptz
+  id                uuid (PK)
+  user_id           uuid (FK → users.id)
+  name              text
+  slug              text
+  description       text
+  content           text
+  original_content  text     (nullable; set on first edit — see Skill editing above)
+  source_title      text
+  source_url        text
+  source_video_id   text
+  format            text     ('claude-skill' | 'cursor-rules' | 'windsurf-rules')
+  is_edited         boolean
+  share_id          text     (nullable; shared by every row from one extraction)
+  is_public         boolean  (default false — see Public share links above)
+  created_at        timestamptz
+  updated_at        timestamptz
 
 usage
   id              uuid (PK)
@@ -293,14 +355,19 @@ usage
   period_end      timestamptz
 ```
 
+Migrations live in `supabase/migrations/` (`0001_share_links.sql`, `0002_skill_editing.sql`) and
+must be applied before the code that depends on their columns is deployed.
+
 ### Tier limits
 
-| Tier | Jacks/month |
-|------|-------------|
-| free | 3 |
-| pro  | 50 |
+| Tier | Jacks/month | Skill editing | Bulk export |
+|------|-------------|----------------|-------------|
+| free | 3           | —              | —           |
+| pro  | 50          | ✅             | ✅          |
 
-The limit is resolved as `tier === 'pro' ? 50 : 3` in `/api/jack` and `/api/usage`, with a per-row `usage.jacks_limit` override. There is no unlimited tier.
+The jack limit is resolved as `tier === 'pro' ? 50 : 3` in `/api/jack` and `/api/usage`, with a
+per-row `usage.jacks_limit` override. There is no unlimited tier. Editing and export are gated
+the same way, on `users.tier` read fresh from Supabase, never cached or read from Clerk.
 
 ### Environment variables
 
@@ -367,6 +434,21 @@ cd packages/web && pnpm build
 node packages/cli/dist/index.mjs --help
 node packages/cli/dist/index.mjs -V
 ```
+
+### Tests
+
+```bash
+pnpm test       # or: pnpm -r test — runs every package's test script
+```
+
+Tests are plain `tsx`-run scripts (no test framework), each printing `PASS`/`FAIL` per
+assertion and exiting non-zero on any failure: `packages/core` runs `url-parser.test.ts`;
+`packages/web` runs `share-id.test.ts` and `export-zip.test.ts`. `.github/workflows/ci.yml` runs
+on every PR and push to `main`: install (frozen lockfile) → `pnpm -r build` → `pnpm -r test` →
+assert the test output actually contains passing results (so a package that silently lost its
+test script still fails CI) → smoke test the built CLI. It supplies well-formed dummy env vars
+(Clerk, Supabase, Stripe, Anthropic) only so the Next.js build can prerender pages that mount
+Clerk's provider — no test talks to a real external service.
 
 ---
 
@@ -455,12 +537,15 @@ Priority order for upcoming work:
 | 7 | Skill Metadata Extraction | Planned |
 | 8 | Skill Chains | Planned |
 | 9 | Skill Search/Filter | Planned |
-| 10 | Bulk Export | Planned |
-| 11 | Skill Editing | Planned |
+| 10 | Bulk Export | ✅ Done (Pro) |
+| 11 | Skill Editing | ✅ Done (Pro) |
 | 12 | Prompt Optimization | Planned |
 | 13 | Pricing Page | ✅ Done |
-| 14 | Account Settings | Planned |
+| 14 | Account Settings | ✅ Done |
 | 15–21 | ContentJacked, Universal Credits, Affiliates, Waitlist | Planned |
+
+Public share links (`/j/[shareId]`) shipped as well, ahead of file upload, but are not one of
+the numbered `prodspec.md` items — see **Public share links** above.
 
 ---
 
