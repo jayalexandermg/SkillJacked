@@ -11,8 +11,14 @@ function slugify(raw: string): string {
     .slice(0, 64) || 'video';
 }
 
-function buildIndex(plan: SkillPlan, generatedSlugs: string[]): string {
-  const generated = new Set(generatedSlugs);
+// Maps each segment to the directory its skill was written to. The generator
+// picks its own `name`, which usually differs from the segmenter's
+// proposed_slug, so the directory can't be derived from the segment alone.
+export function buildIndex(plan: SkillPlan, skills: StructuredSkill[]): string {
+  const dirBySegment = new Map<string, string>();
+  for (const skill of skills) {
+    if (skill.segmentSlug) dirBySegment.set(skill.segmentSlug, skill.name);
+  }
   const lines: string[] = [
     `# ${plan.video.title}`,
     '',
@@ -30,10 +36,9 @@ function buildIndex(plan: SkillPlan, generatedSlugs: string[]): string {
   );
 
   for (const seg of plan.segments) {
-    const status = generated.has(seg.proposed_slug) ? 'generated' : 'planned';
-    const path = generated.has(seg.proposed_slug)
-      ? ` -> [\`${seg.proposed_slug}/SKILL.md\`](./${seg.proposed_slug}/SKILL.md)`
-      : '';
+    const dir = dirBySegment.get(seg.proposed_slug);
+    const status = dir ? 'generated' : 'planned';
+    const path = dir ? ` -> [\`${dir}/SKILL.md\`](./${dir}/SKILL.md)` : '';
     lines.push(`- **${seg.proposed_name}** (\`${seg.proposed_slug}\`) [priority ${seg.priority}] — ${status}${path}`);
   }
 
@@ -60,7 +65,6 @@ export async function writeSkillPack(
   await mkdir(baseDir, { recursive: true });
 
   const skillPaths: string[] = [];
-  const generatedSlugs: string[] = [];
 
   for (const skill of skills) {
     const skillDir = join(baseDir, skill.name);
@@ -68,10 +72,9 @@ export async function writeSkillPack(
     const skillPath = join(skillDir, 'SKILL.md');
     await writeFile(skillPath, skill.content, 'utf-8');
     skillPaths.push(skillPath);
-    generatedSlugs.push(skill.name);
   }
 
-  const indexContent = buildIndex(plan, generatedSlugs);
+  const indexContent = buildIndex(plan, skills);
   const indexPath = join(baseDir, 'INDEX.md');
   await writeFile(indexPath, indexContent, 'utf-8');
 

@@ -51,6 +51,7 @@ core/src/
     skill-generator.ts — generateSkillsFromPlan() — concurrent per-segment LLM calls
     validators/skill-md.ts — validateSkillMarkdown() — check output has required sections
     write-skill-pack.ts — Write skills + INDEX.md to disk
+    write-skill-pack.test.ts — Unit tests for INDEX.md segment → directory linking
     normalize-transcript.ts — Pre-process transcript text before sending to LLM
     prompts.ts        — SKILL_EXTRACTION_PROMPT (v1 single-skill prompt)
     runtime-prompts.ts — SEGMENTER_SYSTEM_PROMPT, SEGMENTER_REPAIR_SYSTEM_PROMPT (v2)
@@ -99,7 +100,8 @@ interface SkillPlan {
 
 // A generated skill (pre-formatting)
 interface StructuredSkill {
-  name: string;
+  name: string;          // Generator-chosen slug; also the skill's output directory
+  segmentSlug?: string;  // The segment's proposed_slug — how INDEX.md links a segment to its directory
   content: string;       // Raw markdown of the skill
   sourceTitle: string;
   sourceUrl: string;
@@ -446,7 +448,7 @@ pnpm test       # or: pnpm -r test — runs every package's test script
 ```
 
 Tests are plain `tsx`-run scripts (no test framework), each printing `PASS`/`FAIL` per
-assertion and exiting non-zero on any failure: `packages/core` runs `url-parser.test.ts`;
+assertion and exiting non-zero on any failure: `packages/core` runs `url-parser.test.ts` and `write-skill-pack.test.ts`;
 `packages/web` runs `share-id.test.ts` and `export-zip.test.ts`. `.github/workflows/ci.yml` runs
 on every PR and push to `main`: install (frozen lockfile) → `pnpm -r build` → `pnpm -r test` →
 assert the test output actually contains passing results (so a package that silently lost its

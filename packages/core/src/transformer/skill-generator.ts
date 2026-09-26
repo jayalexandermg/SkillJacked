@@ -265,6 +265,7 @@ export async function generateSkillsFromPlan(
           type: 'skill' as const,
           skill: {
             name,
+            segmentSlug: segment.proposed_slug,
             sourceTitle: rawContent.title,
             sourceUrl: rawContent.sourceUrl,
             generatedAt: new Date().toISOString(),

@@ -18,7 +18,7 @@ OUTPUT FORMAT (strict):
 name: [kebab-case-skill-name]
 description: [One line — what this skill teaches the AI to do]
 source: [Video title + URL]
-generated_by: SkillJack (skilljacked.com)
+generated_by: SkillJacked (skilljacked.com)
 ---
 
 # [Skill Name]

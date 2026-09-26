@@ -26,6 +26,7 @@ export const metadata: Metadata = {
   title: 'SkillJacked — Turn YouTube videos into AI skills',
   description: 'Stop watching. Start doing. Turn any YouTube video into a Claude Code skill in 10 seconds.',
   keywords: [
+    'SkillJacked',
     'SkillJack',
     'YouTube',
     'AI skills',
@@ -34,11 +35,11 @@ export const metadata: Metadata = {
     'code automation',
     'skill extraction',
   ],
-  authors: [{ name: 'SkillJack' }],
-  creator: 'SkillJack',
+  authors: [{ name: 'SkillJacked' }],
+  creator: 'SkillJacked',
   openGraph: {
     type: 'website',
-    siteName: 'SkillJack',
+    siteName: 'SkillJacked',
     title: 'SkillJacked — Turn YouTube videos into AI skills',
     description: 'Stop watching. Start doing. Turn any YouTube video into a Claude Code skill in 10 seconds.',
     images: [
