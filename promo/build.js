@@ -7,7 +7,9 @@ const font = (f) => fs.readFileSync(path.join(dir, 'fonts', f)).toString('base64
 const html = fs.readFileSync(path.join(dir, 'src', 'promo.html'), 'utf8')
   .replace('%%SYNE%%', font('syne-latin.woff2'))
   .replace('%%DMSANS%%', font('dm-sans-latin.woff2'))
-  .replace('%%JBMONO%%', font('jetbrains-mono-latin.woff2'));
+  .replace('%%JBMONO%%', font('jetbrains-mono-latin.woff2'))
+  .replace('%%SKILLS%%', () => fs.readFileSync(path.join(dir, 'data', 'skills.json'), 'utf8'))
+  .replace('%%SKILLMD%%', () => JSON.stringify(fs.readFileSync(path.join(dir, 'data', 'content-tier-diagnostic.SKILL.md'), 'utf8')));
 
 fs.mkdirSync(path.join(dir, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'dist', 'skilljacked-promo.html'), html);

@@ -14,7 +14,9 @@ const { chromium } = require(process.env.PW_CORE || 'playwright-core');
 const HTML = path.join(__dirname, 'dist', 'skilljacked-promo.html');
 const CHROME = process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const FFMPEG = process.env.FFMPEG || 'ffmpeg';
-const FPS = 60, SUB = 8;
+// SUB=16 is used for the few chunks with fast camera moves (fine text
+// ghosts at 8 subframes once it moves ~20 px/frame).
+const FPS = 60, SUB = Number(process.env.SUB || 8);
 
 async function open() {
   const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-proxy-server', '--force-color-profile=srgb'] });
