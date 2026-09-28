@@ -4,6 +4,7 @@ import SkillPreview from '@/components/skill-preview';
 import Footer from '@/components/footer';
 import { getSupabase } from '@/lib/supabase';
 import { isValidShareId } from '@/lib/share-id';
+import { skillFolderName } from '@/lib/skill-package';
 
 // This route renders on demand (no generateStaticParams, and the Supabase
 // client is constructed per request), so unsharing takes effect immediately.
@@ -19,7 +20,6 @@ const FORMAT_LABELS: Record<string, string> = {
 };
 
 const FORMAT_EXTENSIONS: Record<string, string> = {
-  'claude-skill': 'md',
   'cursor-rules': 'cursorrules',
   'windsurf-rules': 'windsurfrules',
 };
@@ -175,7 +175,11 @@ export default async function SharedExtractionPage({
                   sourceTitle={sourceTitle}
                   sourceUrl={sourceUrl ?? ''}
                   formatLabel={FORMAT_LABELS[format] ?? format}
-                  filename={`${skill.slug}.${FORMAT_EXTENSIONS[format] ?? 'md'}`}
+                  filename={
+                    FORMAT_EXTENSIONS[format]
+                      ? `${skill.slug}.${FORMAT_EXTENSIONS[format]}`
+                      : `${skillFolderName(skill)}/SKILL.md`
+                  }
                   previewMode="partial"
                 />
                 <p className="max-w-3xl mx-auto mt-3 text-center font-body text-sm text-text-secondary">
@@ -196,7 +200,7 @@ export default async function SharedExtractionPage({
       <section className="px-6 pb-20">
         <div className="max-w-4xl mx-auto rounded-xl border border-border-subtle bg-surface p-8 text-center">
           <h2 className="font-heading text-2xl font-bold text-text-primary mb-2">
-            Turn any video into skills
+            Turn YouTube videos into skills
           </h2>
           <p className="font-body text-text-secondary mb-6">
             Paste a YouTube URL and get executable skill files for Claude Code,

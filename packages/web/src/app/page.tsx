@@ -12,8 +12,8 @@ import HowItWorks from '@/components/how-it-works';
 import ComingSoon from '@/components/coming-soon';
 import Footer from '@/components/footer';
 import { jackSkills, type SkillData } from '@/lib/api-client';
-import { saveSkill } from '@/lib/storage';
 import { formatSkill, type Format } from '@/lib/client-formatter';
+import { skillFolderName } from '@/lib/skill-package';
 import { FREE_EXTRACTION_LIMIT } from '@/lib/usage-tracker';
 import {
   clearStoredExtraction,
@@ -202,19 +202,6 @@ export default function Home() {
         void saveSkillsToApi(data)
           .then(() => fetchUsage())
           .catch((err) => console.error('[save] Error:', err));
-      } else {
-        data.forEach((item, index) => {
-          saveSkill({
-            id: `skill_${Date.now()}_${index}`,
-            name: item.skill.name,
-            sourceTitle: item.skill.sourceTitle,
-            sourceUrl: item.skill.sourceUrl,
-            generatedAt: item.skill.generatedAt,
-            content: item.skill.content,
-            format: 'claude-skill',
-            filename: `${item.skill.name}.md`,
-          });
-        });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong.';
@@ -440,7 +427,7 @@ export default function Home() {
                               <p className="text-sm text-text-secondary">
                                 {skill.tier === 'partial'
                                   ? 'Sign up to unlock this skill'
-                                  : 'Sign up to unlock all 10 skills'}
+                                  : `Sign up to unlock all ${fullSkillsCount} skills`}
                               </p>
                               <SignInButton mode="modal">
                                 <button
@@ -538,11 +525,20 @@ export default function Home() {
                     <DownloadBar
                       content={activeDisplaySkill.formatted.content}
                       filename={activeDisplaySkill.formatted.filename}
+                      skillName={activeDisplaySkill.raw.skill.name}
                       format={format}
                       onFormatChange={handleFormatChange}
                       hideActions={!signedIn}
                     />
-                    {signedIn && <InstallGuide format={format} />}
+                    {signedIn && (
+                      <InstallGuide
+                        format={format}
+                        skillName={skillFolderName({
+                          slug: activeDisplaySkill.raw.skill.name,
+                          content: activeDisplaySkill.raw.skill.content,
+                        })}
+                      />
+                    )}
                     {!signedIn && (
                       <div className="w-full max-w-3xl mx-auto mt-6 p-4 bg-surface border border-border-subtle rounded-lg text-center">
                         <p className="text-text-secondary text-sm mb-3">

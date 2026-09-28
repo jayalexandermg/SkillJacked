@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import FormatToggle from './format-toggle';
 import type { Format } from '@/lib/client-formatter';
+import { downloadBlob, downloadSkill } from '@/lib/export-zip';
 
 interface DownloadBarProps {
   content: string;
   filename: string;
+  skillName: string;
   format: Format;
   onFormatChange: (format: Format) => void;
   hideActions?: boolean;
@@ -15,6 +17,7 @@ interface DownloadBarProps {
 export default function DownloadBar({
   content,
   filename,
+  skillName,
   format,
   onFormatChange,
   hideActions,
@@ -22,15 +25,13 @@ export default function DownloadBar({
   const [copied, setCopied] = useState(false);
 
   const handleDownload = () => {
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (format === 'claude-skill') {
+      downloadSkill({ slug: skillName, content }).catch((err) =>
+        console.error('[download] Failed:', err),
+      );
+      return;
+    }
+    downloadBlob(new Blob([content], { type: 'text/plain' }), filename);
   };
 
   const handleCopy = async () => {
@@ -73,7 +74,7 @@ export default function DownloadBar({
                          rounded-lg hover:bg-accent-hover hover:gold-glow
                          transition-all duration-200"
             >
-              Download File
+              {format === 'claude-skill' ? 'Download Skill (.zip)' : 'Download File'}
             </button>
           </div>
         )}

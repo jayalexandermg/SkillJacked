@@ -1,4 +1,5 @@
-import { resolveFilenames } from './export-zip';
+import JSZip from 'jszip';
+import { buildSkillsZip } from './export-zip';
 
 let pass = 0;
 let fail = 0;
@@ -12,53 +13,39 @@ const check = (name: string, cond: boolean) => {
   }
 };
 
-const s = (slug: string, format?: string) => ({ slug, content: 'x', format });
+const md = (name: string) => `---\nname: ${name}\ndescription: Does a thing.\n---\n\n# Skill\n`;
 
-check(
-  'distinct slugs keep their names',
-  JSON.stringify(resolveFilenames([s('alpha'), s('beta')])) ===
-    JSON.stringify(['alpha.md', 'beta.md']),
-);
+async function entries(skills: { slug: string; content: string }[]) {
+  const zip = await JSZip.loadAsync(await (await buildSkillsZip(skills)).arrayBuffer());
+  return Object.values(zip.files).filter((f) => !f.dir).map((f) => f.name).sort();
+}
 
-check(
-  'a collision is suffixed, not overwritten',
-  JSON.stringify(resolveFilenames([s('dup'), s('dup')])) ===
-    JSON.stringify(['dup.md', 'dup-2.md']),
-);
+async function main() {
+  check(
+    'each skill is a <name>/SKILL.md folder',
+    JSON.stringify(await entries([{ slug: 'alpha', content: md('alpha') }, { slug: 'beta', content: md('beta') }])) ===
+      JSON.stringify(['alpha/SKILL.md', 'beta/SKILL.md']),
+  );
 
-check(
-  'three-way collision keeps counting',
-  JSON.stringify(resolveFilenames([s('x'), s('x'), s('x')])) ===
-    JSON.stringify(['x.md', 'x-2.md', 'x-3.md']),
-);
+  check(
+    'no loose .md files at the zip root',
+    (await entries([{ slug: 'a', content: md('a') }])).every((name) => name.includes('/')),
+  );
 
-check(
-  'every selected skill yields a unique filename',
-  new Set(resolveFilenames(Array.from({ length: 50 }, () => s('same')))).size === 50,
-);
+  check(
+    'colliding names become separate folders',
+    JSON.stringify(await entries([{ slug: 'dup', content: md('dup') }, { slug: 'dup', content: md('dup') }])) ===
+      JSON.stringify(['dup-2/SKILL.md', 'dup/SKILL.md']),
+  );
 
-check(
-  'format drives the extension',
-  JSON.stringify(
-    resolveFilenames([s('a', 'cursor-rules'), s('b', 'windsurf-rules')]),
-  ) === JSON.stringify(['a.cursorrules', 'b.windsurfrules']),
-);
+  const zip = await JSZip.loadAsync(
+    await (await buildSkillsZip([{ slug: 'x', content: md('Display Name') }])).arrayBuffer(),
+  );
+  const file = zip.file('display-name/SKILL.md');
+  check('the archived SKILL.md name: matches its folder', !!file && (await file.async('string')).includes('name: display-name\n'));
 
-check(
-  'same slug in different formats does not collide',
-  JSON.stringify(resolveFilenames([s('n', 'claude-skill'), s('n', 'cursor-rules')])) ===
-    JSON.stringify(['n.md', 'n.cursorrules']),
-);
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+}
 
-check(
-  'an empty slug still produces a usable name',
-  resolveFilenames([s('')])[0] === 'skill.md',
-);
-
-check(
-  'an unknown format falls back to .md',
-  resolveFilenames([s('a', 'nonsense')])[0] === 'a.md',
-);
-
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+void main();

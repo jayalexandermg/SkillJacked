@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { UserButton } from '@clerk/nextjs';
 import SkillCard from '@/components/skill-card';
 import ShareToggle from '@/components/share-toggle';
+import InstallGuide from '@/components/install-guide';
 import SkillEditModal from '@/components/skill-edit-modal';
 import { buildSkillsZip, downloadBlob } from '@/lib/export-zip';
 import Footer from '@/components/footer';
@@ -224,6 +225,10 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {skills.length > 0 && (
+            <InstallGuide format="claude-skill" className="-mt-2 mb-8" />
+          )}
+
           {/* Skills grouped by extraction — the extraction is the shareable unit */}
           {skills.length > 0 ? (
             <div className="space-y-10">
@@ -250,7 +255,7 @@ export default function DashboardPage() {
                         generatedAt={skill.created_at}
                         format={skill.format}
                         content={skill.content}
-                        filename={`${skill.slug}.md`}
+                        slug={skill.slug}
                         onDelete={handleDelete}
                         isEdited={Boolean(skill.is_edited)}
                         selected={selected.has(skill.id)}

@@ -7,19 +7,11 @@ import { TransformError, type TransformErrorDetails } from '../utils/errors';
 import { normalizeTranscript } from './normalize-transcript';
 import { withRetry, type RetryOpts } from '../utils/retry';
 import { createLimiter } from '../utils/concurrency';
+import { sanitizeSkillName, setFrontmatterName } from './frontmatter';
 
 const ANTHROPIC_TIMEOUT_MS = 60_000; // 60s
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 const MIN_EXCERPT_LENGTH = 50;
-
-function sanitizeSkillName(raw: string): string {
-  const slug = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-  return slug || `skill-${Date.now()}`;
-}
 
 export async function generateSkill(
   rawContent: RawContent,
@@ -81,7 +73,7 @@ export async function generateSkill(
     sourceTitle: rawContent.title,
     sourceUrl: rawContent.sourceUrl,
     generatedAt: new Date().toISOString(),
-    content: text,
+    content: setFrontmatterName(text, name),
   };
 }
 
@@ -269,7 +261,7 @@ export async function generateSkillsFromPlan(
             sourceTitle: rawContent.title,
             sourceUrl: rawContent.sourceUrl,
             generatedAt: new Date().toISOString(),
-            content: text,
+            content: setFrontmatterName(text, name),
           },
         };
       }),
