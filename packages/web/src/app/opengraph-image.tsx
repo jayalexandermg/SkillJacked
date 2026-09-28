@@ -56,7 +56,7 @@ export default async function Image() {
               opacity: 0.9,
             }}
           >
-            Turn any YouTube video into a Claude Code skill in 10 seconds
+            Turn YouTube videos into Claude Code skills
           </div>
         </div>
 

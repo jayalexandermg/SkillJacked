@@ -2,7 +2,7 @@ const steps = [
   {
     number: '01',
     title: 'Paste URL',
-    description: 'Drop any YouTube video URL into the input field.',
+    description: 'Drop a YouTube video URL into the input field.',
   },
   {
     number: '02',
@@ -12,7 +12,7 @@ const steps = [
   {
     number: '03',
     title: 'Install Skill',
-    description: 'Download the file and drop it into your AI coding tool.',
+    description: 'Download the skill folder and drop it into Claude Code.',
   },
 ];
 

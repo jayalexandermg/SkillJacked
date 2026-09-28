@@ -24,7 +24,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL('https://skilljacked.com'),
   title: 'SkillJacked — Turn YouTube videos into AI skills',
-  description: 'Stop watching. Start doing. Turn any YouTube video into a Claude Code skill in 10 seconds.',
+  description: 'Stop watching. Start doing. Turn YouTube videos into Claude Code skills.',
   keywords: [
     'SkillJacked',
     'SkillJack',
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'SkillJacked',
     title: 'SkillJacked — Turn YouTube videos into AI skills',
-    description: 'Stop watching. Start doing. Turn any YouTube video into a Claude Code skill in 10 seconds.',
+    description: 'Stop watching. Start doing. Turn YouTube videos into Claude Code skills.',
     images: [
       {
         url: '/opengraph-image',
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'SkillJacked — Turn YouTube videos into AI skills',
-    description: 'Stop watching. Start doing. Turn any YouTube video into a Claude Code skill in 10 seconds.',
+    description: 'Stop watching. Start doing. Turn YouTube videos into Claude Code skills.',
   },
   icons: {
     icon: '/favicon.svg',
