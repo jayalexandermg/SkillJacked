@@ -1,29 +1,19 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { SignInButton, UserButton, useUser } from '@clerk/nextjs';
 import Hero from '@/components/hero';
 import UrlInput from '@/components/url-input';
 import LoadingState from '@/components/loading-state';
-import SkillPreview from '@/components/skill-preview';
-import DownloadBar from '@/components/download-bar';
-import InstallGuide from '@/components/install-guide';
+import JackResults from '@/components/jack-results';
 import HowItWorks from '@/components/how-it-works';
 import ComingSoon from '@/components/coming-soon';
 import Footer from '@/components/footer';
-import { jackSkills, type SkillData } from '@/lib/api-client';
-import { formatSkill, type Format } from '@/lib/client-formatter';
-import { skillFolderName } from '@/lib/skill-package';
+import { ApiError, claimJack, getJack, runJack, saveJackSkills } from '@/lib/api-client';
+import { clearStoredJack, getStoredJack, setStoredJack, type StoredJack } from '@/lib/jack-session';
 import { FREE_EXTRACTION_LIMIT, PRO_EXTRACTION_LIMIT, videosLeft } from '@/lib/usage-tracker';
-import {
-  clearStoredExtraction,
-  getStoredExtraction,
-  hasPendingAnonymousExtraction,
-  setStoredExtraction,
-} from '@/lib/client-skill-store';
 
-type AppState = 'idle' | 'loading' | 'preview' | 'error';
-type SkillTier = 'full' | 'partial' | 'locked';
+type AppState = 'idle' | 'loading' | 'results' | 'error';
 
 interface UsageInfo {
   used: number;
@@ -32,37 +22,8 @@ interface UsageInfo {
   remaining: number;
 }
 
-const formatLabels: Record<Format, string> = {
-  'claude-skill': 'Claude Skill',
-  'cursor-rules': 'Cursor Rules',
-  'windsurf-rules': 'Windsurf Rules',
-};
-
-function getGateTier(index: number, isSignedIn: boolean): SkillTier {
-  if (isSignedIn) return 'full';
-  if (index === 0) return 'full';
-  if (index <= 3) return 'partial';
-  return 'locked';
-}
-
-function getSkillDescription(content: string): string {
-  const match = content.match(/^description:\s*(.+)$/m);
-  if (!match) {
-    return 'AI skill extracted from this video.';
-  }
-
-  return match[1].trim().replace(/^['"]|['"]$/g, '');
-}
-
-function buildSkillSavePayload(skills: SkillData[]) {
-  return skills.map((item) => ({
-    name: item.skill.name,
-    slug: item.skill.name,
-    content: item.skill.content,
-    source_title: item.skill.sourceTitle,
-    source_url: item.skill.sourceUrl,
-    format: 'claude-skill',
-  }));
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
 export default function Home() {
@@ -70,121 +31,114 @@ export default function Home() {
   const signedIn = isSignedIn === true;
 
   const [state, setState] = useState<AppState>('idle');
-  const [rawSkills, setRawSkills] = useState<SkillData[]>([]);
-  const [activeSkillIndex, setActiveSkillIndex] = useState(0);
-  const [format, setFormat] = useState<Format>('claude-skill');
+  const [current, setCurrent] = useState<StoredJack | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
-  useEffect(() => {
-    const restoredSkills = getStoredExtraction();
+  const resultsRef = useRef<HTMLDivElement>(null);
+  // Jacks already unlocked (or tried) this session, so a failed claim can't loop.
+  const unlockAttempted = useRef(new Set<string>());
 
-    if (restoredSkills.length > 0) {
-      setRawSkills(restoredSkills);
-      setState('preview');
-    }
+  const show = useCallback((next: StoredJack | null) => {
+    setCurrent(next);
+    if (next) setStoredJack(next);
+    else clearStoredJack();
   }, []);
 
   const fetchUsage = useCallback(async () => {
     try {
       const res = await fetch('/api/usage');
-      if (res.ok) {
-        const data = (await res.json()) as UsageInfo;
-        setUsage(data);
-      }
+      if (res.ok) setUsage((await res.json()) as UsageInfo);
     } catch {
       // Silent fail. The extraction flow should still work.
     }
   }, []);
 
-  const saveSkillsToApi = useCallback(async (skills: SkillData[]) => {
-    const res = await fetch('/api/skills', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skills: buildSkillSavePayload(skills) }),
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to save skills: ${res.status}`);
+  useEffect(() => {
+    const stored = getStoredJack();
+    if (stored) {
+      setCurrent(stored);
+      setState('results');
     }
   }, []);
 
   useEffect(() => {
     if (!isLoaded) return;
-
     if (signedIn) {
       void fetchUsage();
       return;
     }
-
     setUsage(null);
   }, [fetchUsage, isLoaded, signedIn]);
 
+  // Signed out with a signed-in user's jack still on screen: clear it, so the
+  // next person at this browser doesn't see it. Signed-out jacks carry a token.
   useEffect(() => {
-    if (!isLoaded || !signedIn || rawSkills.length === 0) return;
-    if (!hasPendingAnonymousExtraction()) return;
+    if (isLoaded && !signedIn && current && !current.claimToken) {
+      show(null);
+      setState('idle');
+    }
+  }, [current, isLoaded, show, signedIn]);
 
-    void saveSkillsToApi(rawSkills)
-      .then(() => {
-        setStoredExtraction(rawSkills, { pendingAnonymousImport: false });
-        void fetchUsage();
+  // Opened from the library's "Recent jacks": /?jack=<id>
+  useEffect(() => {
+    if (!isLoaded || !signedIn) return;
+    const id = new URLSearchParams(window.location.search).get('jack');
+    if (!id) return;
+    window.history.replaceState(null, '', '/');
+    unlockAttempted.current.add(id);
+    getJack(id)
+      .then((jack) => {
+        show({ jack });
+        setState('results');
+        setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
       })
-      .catch((err) => console.error('[auto-save] Error:', err));
-  }, [fetchUsage, isLoaded, rawSkills, saveSkillsToApi, signedIn]);
+      .catch(() => {
+        setErrorMessage("We couldn't open that jack. It may have been deleted.");
+        setState('error');
+      });
+  }, [isLoaded, show, signedIn]);
 
+  // Just signed up (or in): claim the signed-out jack, which unlocks every
+  // skill, then save the ones ticked before signing up.
   useEffect(() => {
-    if (rawSkills.length === 0) return;
-    if (activeSkillIndex < rawSkills.length) return;
+    if (!isLoaded || !signedIn || !current) return;
+    const { jack, claimToken, pendingSave } = current;
+    const gated = jack.skills.some((s) => s.tier !== 'full');
+    if ((!claimToken && !gated) || unlockAttempted.current.has(jack.id)) return;
+    unlockAttempted.current.add(jack.id);
 
-    setActiveSkillIndex(0);
-  }, [activeSkillIndex, rawSkills.length]);
-
-  const formattedSkills = useMemo(() => {
-    return rawSkills.map((skill) =>
-      formatSkill(
-        skill.skill.content,
-        skill.skill.name,
-        skill.skill.sourceTitle,
-        skill.skill.sourceUrl,
-        format,
-      ),
-    );
-  }, [format, rawSkills]);
-
-  const displaySkills = useMemo(() => {
-    return rawSkills.map((skill, index) => ({
-      raw: skill,
-      formatted: formattedSkills[index],
-      tier: getGateTier(index, signedIn),
-      description: getSkillDescription(skill.skill.content),
-    }));
-  }, [formattedSkills, rawSkills, signedIn]);
-
-  const fullSkillsCount = rawSkills.length;
-  const activeDisplaySkill =
-    displaySkills[Math.min(activeSkillIndex, Math.max(displaySkills.length - 1, 0))] ?? null;
-  const gatedOverlayMessage =
-    !signedIn && activeDisplaySkill
-      ? activeDisplaySkill.tier === 'partial'
-        ? `Sign up free to see the full skill and unlock all ${fullSkillsCount}`
-        : activeDisplaySkill.tier === 'locked'
-          ? `Sign up free to unlock all ${fullSkillsCount} skills`
-          : null
-      : null;
+    void (async () => {
+      try {
+        let unlocked = claimToken ? await claimJack(jack.id, claimToken) : await getJack(jack.id);
+        if (pendingSave && pendingSave.length > 0) {
+          unlocked = await saveJackSkills(jack.id, pendingSave);
+          setNotice(`Saved ${plural(pendingSave.length, 'skill')} to your Library.`);
+        }
+        show({ jack: unlocked });
+        void fetchUsage();
+      } catch {
+        show({ jack });
+        setNotice("We couldn't unlock these results. Jack the video again to see every skill.");
+      }
+    })();
+  }, [current, fetchUsage, isLoaded, show, signedIn]);
 
   const handleSubmit = useCallback(async (url: string) => {
-    if (signedIn && usage?.tier !== 'pro' && usage?.remaining === 0) {
+    if (signedIn && usage?.remaining === 0) {
       setShowLimitModal(true);
       return;
     }
 
     setState('loading');
     setErrorMessage('');
+    setNotice(null);
 
     try {
-      const data = await jackSkills(url);
+      const jack = await runJack(url);
 
-      if (data.length === 0) {
+      if (!jack) {
         setErrorMessage(
           "We couldn't extract any skills from this video. Try a different video, or one with more instructional/how-to content." +
             (signedIn ? " This didn't use one of your monthly videos." : ''),
@@ -193,42 +147,50 @@ export default function Home() {
         return;
       }
 
-      setRawSkills(data);
-      setActiveSkillIndex(0);
-      setState('preview');
-      setStoredExtraction(data, { pendingAnonymousImport: !signedIn });
-
-      if (signedIn) {
-        void saveSkillsToApi(data)
-          .then(() => fetchUsage())
-          .catch((err) => console.error('[save] Error:', err));
-      }
+      const { claimToken, ...view } = jack;
+      show({ jack: view, claimToken });
+      setState('results');
+      if (signedIn) void fetchUsage();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Something went wrong.';
-      setErrorMessage(message);
+      if (err instanceof ApiError && err.upgrade) {
+        setState('idle');
+        setShowLimitModal(true);
+        void fetchUsage();
+        return;
+      }
+      setErrorMessage(err instanceof Error ? err.message : 'Something went wrong.');
       setState('error');
     }
-  }, [fetchUsage, saveSkillsToApi, signedIn, usage?.remaining, usage?.tier]);
+  }, [fetchUsage, show, signedIn, usage?.remaining]);
 
-  const handleFormatChange = useCallback((newFormat: Format) => {
-    setFormat(newFormat);
-  }, []);
+  const handleSave = useCallback(async (skillIds: string[]) => {
+    if (!current) return;
+    const jack = await saveJackSkills(current.jack.id, skillIds);
+    show({ jack });
+    setNotice(`Saved ${plural(skillIds.length, 'skill')} to your Library.`);
+  }, [current, show]);
+
+  const handleSignUpToSave = useCallback((skillIds: string[]) => {
+    if (!current) return;
+    show({ ...current, pendingSave: skillIds });
+    // Unlock runs once the account exists, so allow it again for this jack.
+    unlockAttempted.current.delete(current.jack.id);
+  }, [current, show]);
 
   const handleReset = useCallback(() => {
     setState('idle');
-    setRawSkills([]);
-    setActiveSkillIndex(0);
+    show(null);
     setErrorMessage('');
-    clearStoredExtraction();
+    setNotice(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  }, [show]);
 
   return (
     <main className="min-h-screen">
       <nav className="flex items-center justify-between px-6 pt-6 max-w-5xl mx-auto">
         <div className="flex items-center gap-5">
           <a href="/dashboard" className="text-text-secondary hover:text-text-primary text-sm transition-colors">
-            My Skills
+            Library
           </a>
           <a href="/pricing" className="text-text-secondary hover:text-text-primary text-sm transition-colors">
             Pricing
@@ -274,7 +236,7 @@ export default function Home() {
       </nav>
 
       <section className="pt-12 pb-16 px-6">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <Hero />
 
           <UrlInput
@@ -313,7 +275,7 @@ export default function Home() {
             </div>
           )}
 
-          <div className="mt-10">
+          <div className="mt-10" ref={resultsRef}>
             {state === 'loading' && <LoadingState />}
 
             {state === 'error' && (
@@ -331,207 +293,24 @@ export default function Home() {
               </div>
             )}
 
-            {state === 'preview' && activeDisplaySkill && (
-              <div>
-                <div className="mb-8">
-                  <p className="text-text-secondary text-sm mb-4 text-center">
-                    {fullSkillsCount} skills extracted
-                    {!signedIn && (
-                      <SignInButton mode="modal">
-                        <button
-                          type="button"
-                          className="text-accent ml-1 inline underline-offset-4 transition-all duration-200 hover:text-accent-hover hover:underline focus-visible:outline-none focus-visible:underline"
-                        >
-                          (sign up to unlock them all)
-                        </button>
-                      </SignInButton>
-                    )}
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {displaySkills.map((skill, index) => {
-                      const isActive = index === activeSkillIndex;
-                      const blurClass =
-                        skill.tier === 'locked'
-                          ? 'blur-sm opacity-35 select-none'
-                          : skill.tier === 'partial'
-                            ? 'blur-[1px] opacity-75 select-none'
-                            : '';
-
-                      return (
-                        <div
-                          key={`${skill.raw.skill.name}-${index}`}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setActiveSkillIndex(index)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setActiveSkillIndex(index);
-                            }
-                          }}
-                          className={`group relative text-left p-5 rounded-lg border transition-all duration-200 cursor-pointer ${
-                            isActive
-                              ? 'border-accent bg-surface shadow-[0_0_0_1px_rgba(224,200,102,0.25)]'
-                              : 'border-border-subtle bg-surface hover:border-border-focus'
-                          }`}
-                        >
-                          {skill.tier !== 'full' && (
-                            <div
-                              className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg
-                                         bg-primary/85 px-4 text-center opacity-0 backdrop-blur-[2px]
-                                         transition-opacity duration-200 group-hover:opacity-100"
-                            >
-                              <svg
-                                className="h-6 w-6 text-accent"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.75"
-                              >
-                                <rect x="5" y="11" width="14" height="9" rx="2" />
-                                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                              </svg>
-                              <p className="text-sm text-text-secondary">
-                                {skill.tier === 'partial'
-                                  ? 'Sign up to unlock this skill'
-                                  : `Sign up to unlock all ${fullSkillsCount} skills`}
-                              </p>
-                              <SignInButton mode="modal">
-                                <button
-                                  type="button"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-primary
-                                             transition-colors duration-200 hover:bg-accent-hover"
-                                >
-                                  Sign Up Free
-                                </button>
-                              </SignInButton>
-                            </div>
-                          )}
-
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-accent text-[11px] font-semibold uppercase tracking-[0.18em] mb-2">
-                                Skill {index + 1}
-                              </p>
-                              <h3 className="font-heading text-base font-semibold text-text-primary break-words">
-                                {skill.raw.skill.name}
-                              </h3>
-                            </div>
-                            <span className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
-                              skill.tier === 'full'
-                                ? 'border-success/40 text-success'
-                                : skill.tier === 'partial'
-                                  ? 'border-accent/40 text-accent'
-                                  : 'border-border-subtle text-text-tertiary'
-                            }`}>
-                              {skill.tier === 'full' ? 'Open' : skill.tier === 'partial' ? 'Preview' : 'Locked'}
-                            </span>
-                          </div>
-
-                          <div className="mt-4 space-y-3">
-                            <div>
-                              <p className="text-accent text-[11px] font-semibold uppercase tracking-[0.18em] mb-1">
-                                Description
-                              </p>
-                              <p className={`text-sm leading-6 text-text-secondary break-words ${blurClass}`}>
-                                {skill.description}
-                              </p>
-                            </div>
-
-                            <div>
-                              <p className="text-accent text-[11px] font-semibold uppercase tracking-[0.18em] mb-1">
-                                Source
-                              </p>
-                              <p className={`text-sm leading-6 text-text-secondary break-words ${blurClass}`}>
-                                {skill.raw.skill.sourceTitle || 'Unknown source'}
-                              </p>
-                            </div>
-                          </div>
-
-                          {skill.tier !== 'full' && (
-                            <p className="mt-4 text-xs text-text-tertiary">
-                              {skill.tier === 'partial'
-                                ? 'Sign up to reveal the full skill and actions.'
-                                : 'This skill stays locked until you sign up.'}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <SkillPreview
-                  content={activeDisplaySkill.formatted.content}
-                  name={activeDisplaySkill.raw.skill.name}
-                  description={activeDisplaySkill.description}
-                  sourceTitle={activeDisplaySkill.raw.skill.sourceTitle || 'Unknown source'}
-                  sourceUrl={activeDisplaySkill.raw.skill.sourceUrl}
-                  formatLabel={formatLabels[format]}
-                  filename={activeDisplaySkill.formatted.filename}
-                  overlay={gatedOverlayMessage ? (
-                    <>
-                      <p className="text-text-primary font-heading font-semibold text-lg leading-7">
-                        {gatedOverlayMessage}
-                      </p>
-                      <div className="mt-4 flex justify-center">
-                        <SignInButton mode="modal">
-                          <button className="px-5 py-2.5 bg-accent text-primary font-body font-semibold text-sm rounded-lg hover:bg-accent-hover hover:gold-glow transition-all duration-200">
-                            Sign Up Free
-                          </button>
-                        </SignInButton>
-                      </div>
-                    </>
-                  ) : null}
-                  previewMode={activeDisplaySkill.tier}
-                />
-
-                {activeDisplaySkill.tier === 'full' ? (
-                  <>
-                    <DownloadBar
-                      content={activeDisplaySkill.formatted.content}
-                      filename={activeDisplaySkill.formatted.filename}
-                      skillName={activeDisplaySkill.raw.skill.name}
-                      format={format}
-                      onFormatChange={handleFormatChange}
-                      hideActions={!signedIn}
-                    />
-                    {signedIn && (
-                      <InstallGuide
-                        format={format}
-                        skillName={skillFolderName({
-                          slug: activeDisplaySkill.raw.skill.name,
-                          content: activeDisplaySkill.raw.skill.content,
-                        })}
-                      />
-                    )}
-                    {!signedIn && (
-                      <div className="w-full max-w-3xl mx-auto mt-6 p-4 bg-surface border border-border-subtle rounded-lg text-center">
-                        <p className="text-text-secondary text-sm mb-3">
-                          Sign up to download, copy, and unlock all {fullSkillsCount} skills
-                        </p>
-                        <SignInButton mode="modal">
-                          <button className="px-5 py-2.5 bg-accent text-primary font-body font-semibold text-sm rounded-lg hover:bg-accent-hover hover:gold-glow transition-all duration-200">
-                            Sign Up Free
-                          </button>
-                        </SignInButton>
-                      </div>
-                    )}
-                  </>
-                ) : null}
-
-                <div className="text-center mt-8">
-                  <button
-                    onClick={handleReset}
-                    className="text-text-secondary hover:text-text-primary text-sm
-                               underline underline-offset-4 transition-colors duration-200"
-                  >
-                    Jack another skill
-                  </button>
-                </div>
+            {notice && state === 'results' && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text-primary">
+                <span>{notice}</span>
+                <a href="/dashboard" className="font-semibold text-accent hover:text-accent-hover">
+                  Open Library &rarr;
+                </a>
               </div>
+            )}
+
+            {state === 'results' && current && (
+              <JackResults
+                key={current.jack.id}
+                jack={current.jack}
+                signedIn={signedIn}
+                onSave={handleSave}
+                onSignUpToSave={handleSignUpToSave}
+                onReset={handleReset}
+              />
             )}
           </div>
         </div>

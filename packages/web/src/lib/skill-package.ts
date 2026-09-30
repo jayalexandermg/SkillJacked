@@ -90,8 +90,7 @@ export function packageSkill(skill: ExportableSkill): PackagedSkill {
   return packageSkills([skill])[0];
 }
 
-// Library rows saved in these formats (briefly possible in early builds, and
-// still accepted by POST /api/skills) hold rules text, not a SKILL.md, so they
+// Library rows saved in these formats (possible in early builds) hold rules text, not a SKILL.md, so they
 // export as the flat file those tools read instead of a skill folder.
 const LEGACY_EXTENSIONS: Record<string, string> = {
   'cursor-rules': 'cursorrules',

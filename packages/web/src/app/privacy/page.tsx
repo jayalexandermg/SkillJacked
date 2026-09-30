@@ -29,9 +29,10 @@ export default function PrivacyPage() {
             your email address and an account ID in our database.
           </li>
           <li>
-            <strong>Skills you save.</strong> Their content (including any edits and the original
-            version), the title and link of the source video, and whether you&apos;ve published a share
-            link.
+            <strong>Your results.</strong> Every video you run is stored with the skills generated from
+            it and the video&apos;s title, channel and link, so you can come back and save them later.
+            Skills you save to your library also keep any edits, the original version, and whether
+            you&apos;ve published a share link.
           </li>
           <li>
             <strong>Usage.</strong> How many videos you&apos;ve used this month, and your plan.
@@ -45,14 +46,26 @@ export default function PrivacyPage() {
             them to our AI provider to generate skills. We don&apos;t store transcripts.
           </li>
           <li>
+            <strong>If you aren&apos;t signed in.</strong> Your results are stored without any account,
+            tied to a random code that only your browser tab holds (we keep a one-way hash of it, not
+            the code). If you sign up in that tab, the results move to your new account. Otherwise
+            they&apos;re deleted after 7 days.
+          </li>
+          <li>
             <strong>Technical data.</strong> Your IP address is used briefly, in memory, to prevent
             abuse, and isn&apos;t saved by our app. Our hosting provider keeps standard request logs,
             which include IP addresses and the video links you submit.
           </li>
           <li>
-            <strong>Your browser.</strong> Your latest results are kept in your browser&apos;s session
-            storage, which clears when you close the tab. Our sign-in provider uses cookies to keep you
-            signed in. We don&apos;t use analytics or advertising cookies.
+            <strong>Your browser.</strong> Your latest results, and the code for claiming signed-out
+            results, are kept in your browser&apos;s session storage, which clears when you close the
+            tab. Local storage remembers which tool you install skills into. Our sign-in provider uses
+            cookies to keep you signed in. We don&apos;t use analytics or advertising cookies.
+          </li>
+          <li>
+            <strong>Video thumbnails.</strong> Thumbnails are loaded by your browser straight from
+            YouTube (i.ytimg.com), so YouTube receives your IP address and browser details when you
+            view results or your library.
           </li>
         </ul>
         <p>
@@ -96,7 +109,9 @@ export default function PrivacyPage() {
 
       <LegalSection title="How long we keep it">
         <p>
-          We keep your account data and saved skills while your account exists. If you ask us to delete
+          We keep your account data, your results and your saved skills while your account exists.
+          Results from signed-out visits that aren&apos;t claimed by signing up are deleted after 7
+          days. If you ask us to delete
           your account, we&apos;ll delete it from our database within 30 days. Copies may remain for a
           limited time in backups and logs. Stripe keeps billing records for as long as the law
           requires.

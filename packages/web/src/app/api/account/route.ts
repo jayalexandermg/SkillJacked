@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getSupabase } from '@/lib/supabase';
 import { getStripe } from '@/lib/stripe';
+import { currentPeriod, tierLimit } from '@/lib/usage-server';
 
 export interface AccountInfo {
   tier: 'free' | 'pro';
@@ -18,9 +19,6 @@ export interface AccountInfo {
   hasBilling: boolean;
 }
 
-const FREE_LIMIT = 3;
-const PRO_LIMIT = 50;
-
 function emptyAccount(): AccountInfo {
   return {
     tier: 'free',
@@ -28,7 +26,7 @@ function emptyAccount(): AccountInfo {
     renewalDate: null,
     cancelAtPeriodEnd: false,
     jacksUsed: 0,
-    jacksLimit: FREE_LIMIT,
+    jacksLimit: tierLimit('free'),
     librarySkills: 0,
     hasBilling: false,
   };
@@ -78,21 +76,20 @@ export async function GET() {
     .single();
 
   // A signed-in user with no row yet is a legitimate pre-first-jack state, not
-  // an error — the jack and skills routes both create the row on demand.
+  // an error — the jack route creates the row on demand.
   if (!user) {
     return NextResponse.json(emptyAccount());
   }
 
   const tier: 'free' | 'pro' = user.tier === 'pro' ? 'pro' : 'free';
-  const fallbackLimit = tier === 'pro' ? PRO_LIMIT : FREE_LIMIT;
+  const fallbackLimit = tierLimit(tier);
 
   const [usageResult, skillsResult] = await Promise.all([
     supabase
       .from('usage')
       .select('jacks_used, jacks_limit')
       .eq('user_id', user.id)
-      .order('period_start', { ascending: false })
-      .limit(1)
+      .eq('period_start', currentPeriod().start)
       .maybeSingle(),
     supabase
       .from('skills')

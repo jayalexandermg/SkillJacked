@@ -83,6 +83,7 @@ interface RawContent {
   duration: string;
   sourceUrl: string;
   platform: 'youtube';
+  channel?: string;      // oEmbed author_name; shown under the video title on the web
   transcriptMethod?: 'captions' | 'supadata' | 'yt-dlp' | 'whisper' | 'metadata';
 }
 
@@ -107,6 +108,7 @@ interface StructuredSkill {
   content: string;       // Raw markdown of the skill
   sourceTitle: string;
   sourceUrl: string;
+  sourceChannel?: string;
   generatedAt: string;
 }
 
@@ -214,7 +216,7 @@ web/src/
     page.tsx                    — Landing page (hero, URL input, skill preview)
     layout.tsx                  — Root layout with Clerk provider
     opengraph-image.tsx         — Generated OG image
-    dashboard/page.tsx          — Authenticated skill library (grouping, sharing, bulk export, editing)
+    dashboard/page.tsx          — Library: Recent jacks strip, skills grouped by video, sharing, Pro bulk export
     settings/page.tsx           — Account settings: plan, usage, billing portal, sign out
     pricing/page.tsx            — Free / Pro pricing page
     checkout/success/page.tsx   — Post-Stripe-checkout success
@@ -224,8 +226,12 @@ web/src/
     j/[shareId]/page.tsx        — Public, unauthenticated permalink for one shared extraction
     terms/, privacy/, refunds/, contact/ — Legal pages (see Legal pages below)
     api/
-      jack/route.ts             — POST: extract skills from YouTube URL
-      skills/route.ts           — GET: list user's skills; POST: save skills (mints share_id)
+      jack/route.ts             — POST: run a jack, store it (jacks + jack_skills), return a gated view
+      jacks/route.ts            — GET: recent jacks that still have unsaved skills (summaries only)
+      jacks/[id]/route.ts       — GET: one of the user's jacks, every skill in full
+      jacks/[id]/claim/route.ts — POST: attach a signed-out jack to the account that just signed up
+      jacks/[id]/save/route.ts  — POST: copy chosen jack skills into the library (skills rows)
+      skills/route.ts           — GET: list user's library (with each skill's channel)
       skills/[id]/route.ts      — DELETE: remove a skill; PATCH: edit content or reset (Pro-only)
       share/route.ts            — POST: publish/unpublish an extraction (sets is_public)
       usage/route.ts            — GET: current usage stats
@@ -237,12 +243,17 @@ web/src/
                                   customer.subscription.updated/deleted, invoice.paid)
   components/
     hero.tsx, url-input.tsx     — Landing page UI
-    skill-card.tsx, skill-preview.tsx — Skill display
+    jack-results.tsx            — Results grid (select, save, download) + the Preview & export modal
+    library-detail.tsx          — Library detail modal: sidebar, reader, Copy/Download/Edit/Delete
+    skill-reader.tsx            — One skill: install-target tabs, install path + unzip commands, coloured SKILL.md
+    skill-tile.tsx              — Grid tile used by results and library (checkbox, tier/badge)
+    skill-lines.tsx             — SKILL.md line colouring shared by the reader and skill-preview
+    skill-preview.tsx           — Partial-preview card used by the public share page
+    video-header.tsx            — Thumbnail (from i.ytimg.com) + title + channel
+    modal.tsx, copy-button.tsx  — Dialog shell; copy button + shared button classes
     skill-edit-modal.tsx        — Edit one skill's content (Pro-only; textarea, save/reset)
-    share-toggle.tsx            — Publish/unpublish + copy-link control for one extraction
-    format-toggle.tsx           — Claude/Cursor/Windsurf format switcher
-    download-bar.tsx, loading-state.tsx
-    how-it-works.tsx, install-guide.tsx
+    share-toggle.tsx            — Publish/unpublish + copy-link control for one video's saved skills
+    loading-state.tsx, how-it-works.tsx
     footer.tsx, coming-soon.tsx — Footer (links to pricing + legal pages); "What's next"
     legal-page.tsx              — Shared layout for the legal pages
   lib/
@@ -250,9 +261,17 @@ web/src/
     legal.ts       — Operator, governing state, contact email, last-updated date for the legal pages
     stripe.ts      — Lazy-initialized Stripe client
     usage-tracker.ts — Tier limits + videosLeft(): the one user-facing usage wording ("2 of 3 videos left this month")
-    api-client.ts  — Browser-side API fetch helpers
-    client-formatter.ts — Client-side format conversion
-    client-skill-store.ts — Browser-side skill cache for the landing page
+    usage-server.ts — currentPeriod(), tierLimit(), ensureUsageRow(), reserveJack()/refundJack() (atomic, via SQL functions)
+    users.ts       — getOrCreateUser(): users row for a Clerk id, created inline if the webhook hasn't landed
+    jack-view.ts   — Pure: tierFor()/viewSkill() signed-out gating, skillDescription(), videoIdFromUrl(), thumbnailUrl()
+    jack-view.test.ts — Unit tests for jack-view.ts
+    jacks-server.ts — getJack()/getOwnedJack()/getJackSkills()/toJackView()
+    claim-token.ts — newClaimToken()/hashClaimToken()/claimTokenMatches() for signed-out jacks
+    claim-token.test.ts — Unit tests for claim-token.ts
+    install-targets.ts — Claude Code / Codex / Cursor / Gemini CLI tabs, Hermes under More: folder, path, unzip commands
+    install-targets.test.ts — Unit tests for install-targets.ts
+    api-client.ts  — Browser-side API helpers (runJack, getJack, claimJack, saveJackSkills, getRecentJacks)
+    jack-session.ts — sessionStorage for the jack on screen, its claim token, and skills to save after sign-up
     share-id.ts     — generateShareId() / isValidShareId() — 10-char, 64-symbol, 60-bit ids
     share-id.test.ts — Unit tests for share-id.ts
     skill-package.ts — skillFolderName() / packageSkills() / exportEntries() — `<name>/SKILL.md` layout, collision-safe
@@ -271,27 +290,52 @@ Main extraction endpoint. `maxDuration = 280` (Vercel serverless budget covering
 
 Flow:
 1. IP-based rate limiting (5 requests / 15 min per IP, in-memory)
-2. Body size cap (1 KB)
-3. Validate URL input and format
-4. If user is authenticated (Clerk): check monthly jack limit, return 402 if exceeded
-5. Run `jackSkills()` from `@skilljack/core` with `count: 10, concurrency: 3`. If the first segment+generate pass yields zero skills, `jackSkills()` retries once with a fresh segmenter call
-6. If authenticated and at least one skill came back: increment `usage.jacks_used` in Supabase (non-fatal if this fails). A zero-skill jack is shown as a failure, so it is never charged
-7. Return array of `{ skill, formatted }` objects
+2. Body size cap (1 KB), then validate the URL
+3. Signed in: `getOrCreateUser()` → `ensureUsageRow()` → `reserveJack()`, one conditional SQL UPDATE
+   (`reserve_jack`) so parallel requests can't overshoot the limit. 402 with `upgrade: true` if none left
+4. Run `jackSkills()` from `@skilljack/core` with `count: 10, concurrency: 3`. If the first segment+generate pass yields zero skills, `jackSkills()` retries once with a fresh segmenter call
+5. `refundJack()` on every failure after the reservation: missing API key, a thrown extraction, zero
+   skills (returns `{ jack: null }`), or a failed store. A zero-skill jack is never charged. Known gap:
+   a Vercel hard kill mid-jack keeps the charge (nothing is left running to refund it)
+6. Store one `jacks` row (new `share_id`, and for signed-out visitors the SHA-256 of a fresh claim
+   token) plus one `jack_skills` row per skill, then delete unclaimed signed-out jacks older than 7 days
+7. Return `{ jack }`: a `JackView` gated by `viewSkill()`, plus `claimToken` for signed-out visitors
+
+### Jacks, saving and claiming
+
+Every jack is stored; saving to the library is opt-in, so a user never loses a paid-for jack by not
+clicking Save. Unsaved skills stay reachable from the library's **Recent jacks** strip (`GET /api/jacks`),
+which opens `/?jack=<id>` on the landing page.
+
+Signed-out gating is server-side (`lib/jack-view.ts`): skill 1 in full, skills 2–4 as name +
+description, the rest name only. The browser never receives content it can't show, so blurring is
+cosmetic, not the protection. A signed-out visitor can download or copy only the unlocked skill.
+
+Claiming: the signed-out response carries a claim token, kept in sessionStorage (`lib/jack-session.ts`);
+the database holds only its hash. After sign-up the landing page calls `POST /api/jacks/:id/claim`,
+which sets `user_id` (conditional on it still being null) and returns every skill. A claim doesn't use
+one of the month's videos. If the visitor ticked skills and clicked "Sign up to save", those ids ride
+along in sessionStorage and are saved right after the claim.
+
+Saving (`POST /api/jacks/:id/save`) copies each chosen `jack_skills` row into `skills` (one insert per
+skill, then a conditional link back via `jack_skills.saved_skill_id`, so a double-click can't save
+twice). Saved rows carry the jack's `share_id` and inherit that video's current `is_public`. Deleting a
+library skill nulls `saved_skill_id` (FK `on delete set null`), so the skill returns to Recent jacks.
 
 ### Public share links (`/j/[shareId]`)
 
-Every `POST /api/skills` call mints one `share_id` (via `lib/share-id.ts`, 10 chars from a
-64-symbol alphabet, 60 bits of entropy) shared by every skill row from that extraction —
-`skills` has no separate batch/extraction table, so `share_id` is how one extraction's rows
-are grouped, both on the dashboard and for sharing. Minting is unconditional; it does not by
-itself publish anything.
+Every jack mints one `share_id` (via `lib/share-id.ts`, 10 chars from a 64-symbol alphabet, 60 bits
+of entropy), stored on `jacks` and copied onto every `skills` row saved from it — so `share_id` groups
+one video's saved skills, both in the library and for sharing (rows saved before jacks existed got one
+per save). Minting is unconditional; it does not by itself publish anything. A share link shows only
+saved skills.
 
 Extractions are **private by default**. `POST /api/share` (auth required) is the only thing
 that ever sets `is_public true`, scoped to `share_id AND user_id` so one user's share id
 cannot be used to toggle another user's extraction — the Supabase client uses the service-role
 key and bypasses RLS, so ownership is enforced in the query itself. `dashboard/page.tsx` groups
 skills by `share_id` (legacy rows saved before this shipped have none, and get no share
-control) and renders `<ShareToggle>` per group.
+control) and renders `<ShareToggle>` on each video's header.
 
 `GET /j/[shareId]` (public page, no auth) looks up rows by `share_id AND is_public = true` in
 one query — an id that doesn't exist and one that exists but isn't public both 404 identically,
@@ -308,19 +352,24 @@ on the *first* edit only, so a second edit doesn't overwrite it as "previous ver
 what makes `{ reset: true }` restore the originally generated skill rather than the last edit.
 `is_edited` and `updated_at` are stamped on every write.
 
-Bulk export is entirely client-side: `lib/export-zip.ts` builds a ZIP in the browser
+Download-all on the results screen is free; bulk export across the library is Pro. Both are
+entirely client-side: `lib/export-zip.ts` builds a ZIP in the browser
 (`buildSkillsZip()`, dynamic `jszip` import) from skills already in memory on the dashboard —
 no server route, since uploading content only to receive it back would waste the serverless
 budget. Both features are Pro-gated in `dashboard/page.tsx`'s UI (selection
 checkboxes and the edit button are only wired up when `tier === 'pro'`); free users see an
-upgrade prompt in place of the bulk-export control.
+upgrade prompt in place of the bulk-export control, and a locked Edit button with a PRO badge that
+links to `/pricing`.
 
 ### Skill downloads
 
 Claude Code (and every Agent Skills tool) only loads a skill from `<name>/SKILL.md`, where the
 folder equals the frontmatter `name:` — a loose `<name>.md` is silently ignored. So every web
 download is a ZIP of folders: a single skill downloads as `<name>.zip` holding `<name>/SKILL.md`
-(`downloadSkill()`, landing page and library card), and the Pro bulk export uses the same layout.
+(`downloadSkill()`), and multi-skill downloads use the same layout. The SKILL.md is the same for every
+tool; `skill-reader.tsx` tabs (from `lib/install-targets.ts`) only change the folder shown:
+`~/.claude/skills`, `~/.codex/skills`, `~/.cursor/skills`, `~/.gemini/skills`, and Hermes
+`~/.hermes/skills` under More. The chosen tab is remembered in localStorage. There is no format toggle.
 `lib/skill-package.ts` decides the folder: the frontmatter `name:` if present (a Pro edit may have
 changed it), else the slug, kebab-cased and capped at 64 chars; collisions get `-2`, `-3`, and the
 suffix is written back into `name:` so folder and name never disagree. Core enforces the same rule
@@ -328,8 +377,8 @@ at generation time (`transformer/frontmatter.ts`: `setFrontmatterName()`, plus `
 so one run never produces two skills with the same folder), so new skills already match; the web
 layer re-enforces it for edited and pre-fix library rows. Library rows whose `format` is
 `cursor-rules`/`windsurf-rules` hold rules text, not a SKILL.md (early builds saved formatted
-content), so `exportEntries()` exports them as flat `<slug>.cursorrules`/`.windsurfrules` files. Copy-to-clipboard copies the SKILL.md text
-only. `install-guide.tsx` gives the exact path and one-line unzip commands.
+content), so `exportEntries()` exports them as flat `<slug>.cursorrules`/`.windsurfrules` files. The library shows them without install
+tabs or Edit. Copy-to-clipboard copies the SKILL.md text only.
 
 ### Legal pages
 
@@ -337,7 +386,8 @@ only. `install-guide.tsx` gives the exact path and one-line unzip commands.
 `components/legal-page.tsx`. The facts they depend on (operator, governing state, contact email,
 last-updated date) live in `lib/legal.ts`, so incorporating means editing one file. The Privacy Policy
 makes factual claims about the code: no analytics, transcripts not stored, IPs only held in memory,
-the list of processors (Clerk, Supabase, Stripe, Anthropic, Supadata, Vercel). **Any change to data
+the list of processors (Clerk, Supabase, Stripe, Anthropic, Supadata, Vercel), every jack's results
+stored, signed-out results deleted after 7 days, and thumbnails loaded from YouTube (i.ytimg.com). **Any change to data
 handling must update `privacy/page.tsx` in the same PR.** Account deletion is by email request (there is
 no in-app flow, and the Clerk webhook does not cascade deletes), and the policy promises it within 30 days.
 
@@ -376,10 +426,26 @@ skills
   source_video_id   text
   format            text     ('claude-skill' | 'cursor-rules' | 'windsurf-rules')
   is_edited         boolean
-  share_id          text     (nullable; shared by every row from one extraction)
+  share_id          text     (nullable; the jack's share_id — one per video)
   is_public         boolean  (default false — see Public share links above)
+  jack_id           uuid     (nullable; FK → jacks.id, on delete set null)
   created_at        timestamptz
   updated_at        timestamptz
+
+jacks                          (every extraction, saved or not)
+  id                uuid (PK)
+  user_id           uuid     (nullable until claimed; FK → users.id, on delete cascade)
+  claim_token_hash  text     (SHA-256 of the signed-out claim token; cleared on claim)
+  share_id          text     (unique)
+  source_title, source_url, source_video_id, source_channel  text
+  created_at        timestamptz
+
+jack_skills
+  id                uuid (PK)
+  jack_id           uuid     (FK → jacks.id, on delete cascade)
+  position          integer  (unique per jack; drives signed-out gating)
+  name, description, content  text
+  saved_skill_id    uuid     (nullable; FK → skills.id, on delete set null)
 
 usage
   id              uuid (PK)
@@ -390,8 +456,10 @@ usage
   period_end      timestamptz
 ```
 
-Migrations live in `supabase/migrations/` (`0001_share_links.sql`, `0002_skill_editing.sql`) and
-must be applied before the code that depends on their columns is deployed.
+Migrations live in `supabase/migrations/` (`0001_share_links.sql`, `0002_skill_editing.sql`,
+`0003_jacks.sql`) and must be applied before the code that depends on their columns is deployed.
+`0003` also defines the `reserve_jack` / `refund_jack` SQL functions `/api/jack` calls; without it
+every jack fails. All are safe to re-run.
 
 ### Tier limits
 
@@ -486,7 +554,8 @@ pnpm test       # or: pnpm -r test — runs every package's test script
 
 Tests are plain `tsx`-run scripts (no test framework), each printing `PASS`/`FAIL` per
 assertion and exiting non-zero on any failure: `packages/core` runs `url-parser.test.ts`, `write-skill-pack.test.ts` and `frontmatter.test.ts`;
-`packages/web` runs `share-id.test.ts`, `skill-package.test.ts`, `export-zip.test.ts` and `source-url.test.ts`. `.github/workflows/ci.yml` runs
+`packages/web` runs `share-id.test.ts`, `skill-package.test.ts`, `export-zip.test.ts`, `source-url.test.ts`,
+`install-targets.test.ts`, `jack-view.test.ts` and `claim-token.test.ts`. `.github/workflows/ci.yml` runs
 on every PR and push to `main`: install (frozen lockfile) → `pnpm -r build` → `pnpm -r test` →
 assert the test output actually contains passing results (so a package that silently lost its
 test script still fails CI) → smoke test the built CLI. It supplies well-formed dummy env vars
