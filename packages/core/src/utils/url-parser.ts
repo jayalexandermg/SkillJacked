@@ -59,9 +59,12 @@ export function parseUrl(rawUrl: string): ParsedUrl {
     throw new ValidationError("Couldn't find a video ID in that URL. Try pasting a full YouTube video link.");
   }
 
+  // Store a canonical link, never the pasted one: share links carry YouTube's
+  // `si` tracking parameter, which identifies whoever copied the link and
+  // would otherwise be saved with the skill and shown on public share pages.
   return {
     platform: 'youtube',
     videoId,
-    url: trimmed,
+    url: `https://www.youtube.com/watch?v=${videoId}`,
   };
 }

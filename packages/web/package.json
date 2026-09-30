@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "test": "tsx src/lib/share-id.test.ts && tsx src/lib/skill-package.test.ts && tsx src/lib/export-zip.test.ts",
+    "test": "tsx src/lib/share-id.test.ts && tsx src/lib/skill-package.test.ts && tsx src/lib/export-zip.test.ts && tsx src/lib/source-url.test.ts",
     "build": "pnpm --filter @skilljack/core build && next build",
     "start": "next start"
   },
