@@ -15,7 +15,7 @@ const check = (name: string, cond: boolean) => {
 
 const md = (name: string) => `---\nname: ${name}\ndescription: Does a thing.\n---\n\n# Skill\n`;
 
-async function entries(skills: { slug: string; content: string }[]) {
+async function entries(skills: { slug: string; content: string; format?: string }[]) {
   const zip = await JSZip.loadAsync(await (await buildSkillsZip(skills)).arrayBuffer());
   return Object.values(zip.files).filter((f) => !f.dir).map((f) => f.name).sort();
 }
@@ -43,6 +43,12 @@ async function main() {
   );
   const file = zip.file('display-name/SKILL.md');
   check('the archived SKILL.md name: matches its folder', !!file && (await file.async('string')).includes('name: display-name\n'));
+
+  check(
+    'a legacy rules row sits beside skill folders, not inside one',
+    JSON.stringify(await entries([{ slug: 'a', content: md('a') }, { slug: 'r', content: 'rules', format: 'cursor-rules' }])) ===
+      JSON.stringify(['a/SKILL.md', 'r.cursorrules']),
+  );
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

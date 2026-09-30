@@ -1,4 +1,4 @@
-import { packageSkills, skillFolderName } from './skill-package';
+import { exportEntries, packageSkills, skillFolderName } from './skill-package';
 
 let pass = 0;
 let fail = 0;
@@ -47,6 +47,22 @@ check('no frontmatter falls back to the slug', skillFolderName(s('the-slug', '# 
 check('content without frontmatter is left as-is', packageSkills([s('a', '# Body\n')])[0].content === '# Body\n');
 check('an empty slug and no name still produce a usable folder', skillFolderName(s('', '# x\n')) === 'skill');
 check('the body is never altered', packageSkills([s('a', md('A B', 'name: not frontmatter\n'))])[0].content.endsWith('name: not frontmatter\n'));
+
+const paths = (skills: { slug: string; content: string; format?: string }[]) => exportEntries(skills).map((e) => e.path);
+check(
+  'legacy rules rows export as flat files, skills as folders',
+  JSON.stringify(paths([{ slug: 'a', content: md('a') }, { slug: 'b', content: '# Cursor Rules', format: 'cursor-rules' }, { slug: 'c', content: 'x', format: 'windsurf-rules' }])) ===
+    JSON.stringify(['a/SKILL.md', 'b.cursorrules', 'c.windsurfrules']),
+);
+check(
+  'legacy rules content is exported untouched',
+  exportEntries([{ slug: 'b', content: '# Cursor Rules\nname: nope', format: 'cursor-rules' }])[0].content === '# Cursor Rules\nname: nope',
+);
+check(
+  'legacy file names never collide',
+  new Set(paths([{ slug: 'x', content: '', format: 'cursor-rules' }, { slug: 'x', content: '', format: 'cursor-rules' }, { slug: 'x-2', content: '', format: 'cursor-rules' }])).size === 3,
+);
+check('rows with no format are skills', paths([{ slug: 'n', content: md('n') }])[0] === 'n/SKILL.md');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -49,7 +49,7 @@ core/src/
     index.ts          — transform(rawContent) → StructuredSkill (single-skill path)
     segmenter.ts      — segmentTranscript() — LLM call that splits transcript into skill topics
     skill-generator.ts — generateSkillsFromPlan() — concurrent per-segment LLM calls
-    frontmatter.ts    — sanitizeSkillName() / setFrontmatterName() — keep `name:` equal to the skill's folder
+    frontmatter.ts    — sanitizeSkillName() / setFrontmatterName() / dedupeSkillNames() — keep `name:` equal to a unique folder
     frontmatter.test.ts — Unit tests for frontmatter.ts
     validators/skill-md.ts — validateSkillMarkdown() — check output has required sections
     write-skill-pack.ts — Write skills + INDEX.md to disk
@@ -252,7 +252,7 @@ web/src/
     client-skill-store.ts — Browser-side skill cache for the landing page
     share-id.ts     — generateShareId() / isValidShareId() — 10-char, 64-symbol, 60-bit ids
     share-id.test.ts — Unit tests for share-id.ts
-    skill-package.ts — skillFolderName() / packageSkills() — `<name>/SKILL.md` layout, collision-safe
+    skill-package.ts — skillFolderName() / packageSkills() / exportEntries() — `<name>/SKILL.md` layout, collision-safe
     skill-package.test.ts — Unit tests for skill-package.ts
     export-zip.ts    — buildSkillsZip() / downloadSkill() / downloadBlob() — client-side ZIP downloads
     export-zip.test.ts — Round-trips a built ZIP to check its folder layout
@@ -321,8 +321,11 @@ download is a ZIP of folders: a single skill downloads as `<name>.zip` holding `
 `lib/skill-package.ts` decides the folder: the frontmatter `name:` if present (a Pro edit may have
 changed it), else the slug, kebab-cased and capped at 64 chars; collisions get `-2`, `-3`, and the
 suffix is written back into `name:` so folder and name never disagree. Core enforces the same rule
-at generation time (`transformer/frontmatter.ts`), so new skills already match; the web layer
-re-enforces it for edited and pre-fix library rows. Copy-to-clipboard copies the SKILL.md text
+at generation time (`transformer/frontmatter.ts`: `setFrontmatterName()`, plus `dedupeSkillNames()`
+so one run never produces two skills with the same folder), so new skills already match; the web
+layer re-enforces it for edited and pre-fix library rows. Library rows whose `format` is
+`cursor-rules`/`windsurf-rules` hold rules text, not a SKILL.md (early builds saved formatted
+content), so `exportEntries()` exports them as flat `<slug>.cursorrules`/`.windsurfrules` files. Copy-to-clipboard copies the SKILL.md text
 only. `install-guide.tsx` gives the exact path and one-line unzip commands.
 
 ### Account settings (`/settings`)
