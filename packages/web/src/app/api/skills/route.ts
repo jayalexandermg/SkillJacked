@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getSupabase } from '@/lib/supabase';
-import { generateShareId } from '@/lib/share-id';
 
-// GET /api/skills — fetch all skills for the authenticated user
+// GET /api/skills — the user's library. Skills get here only via
+// POST /api/jacks/:id/save.
 export async function GET() {
   const { userId } = await auth();
   if (!userId) {
@@ -32,82 +32,17 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to fetch skills' }, { status: 500 });
   }
 
-  return NextResponse.json({ skills });
-}
-
-// POST /api/skills — save one or more skills
-export async function POST(request: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // The channel lives on the jack. A second query rather than an embed: skills
+  // and jacks are linked two ways (skills.jack_id and jack_skills), which makes
+  // a PostgREST embed ambiguous.
+  const jackIds = [...new Set((skills ?? []).map((s) => s.jack_id).filter(Boolean))];
+  const channels = new Map<string, string | null>();
+  if (jackIds.length > 0) {
+    const { data: jacks } = await getSupabase().from('jacks').select('id, source_channel').in('id', jackIds);
+    for (const j of jacks ?? []) channels.set(j.id, j.source_channel);
   }
 
-  // Look up or create user record
-  let { data: user } = await getSupabase()
-    .from('users')
-    .select('id')
-    .eq('clerk_id', userId)
-    .single();
-
-  if (!user) {
-    // User signed up but webhook hasn't fired yet — create inline
-    const { data: newUser, error: createErr } = await getSupabase()
-      .from('users')
-      .insert({ clerk_id: userId, email: 'pending@webhook' })
-      .select('id')
-      .single();
-
-    if (createErr || !newUser) {
-      console.error('[/api/skills] Failed to create user:', createErr);
-      return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
-    }
-    user = newUser;
-  }
-
-  const body = await request.json();
-  const { skills } = body as {
-    skills: Array<{
-      name: string;
-      slug: string;
-      content: string;
-      source_title?: string;
-      source_url?: string;
-      source_video_id?: string;
-      format?: string;
-    }>;
-  };
-
-  if (!Array.isArray(skills) || skills.length === 0) {
-    return NextResponse.json({ error: 'No skills provided' }, { status: 400 });
-  }
-
-  // One id per POST — every skill from a single extraction shares it, which is
-  // what /j/[shareId] resolves. Minted here rather than at share time so the
-  // link is stable, but is_public defaults to false, so minting it publishes
-  // nothing.
-  const shareId = generateShareId();
-
-  const rows = skills.map((s) => ({
-    user_id: user.id,
-    name: s.name,
-    slug: s.slug,
-    content: s.content,
-    source_title: s.source_title ?? null,
-    source_url: s.source_url ?? null,
-    source_video_id: s.source_video_id ?? null,
-    format: s.format ?? 'claude-skill',
-    share_id: shareId,
-  }));
-
-  const { data, error } = await getSupabase()
-    .from('skills')
-    .insert(rows)
-    .select('id, name, slug');
-
-  if (error) {
-    console.error('[/api/skills] POST error:', error);
-    return NextResponse.json({ error: 'Failed to save skills' }, { status: 500 });
-  }
-
-  return NextResponse.json({ saved: data, share_id: shareId });
+  return NextResponse.json({
+    skills: (skills ?? []).map((s) => ({ ...s, source_channel: channels.get(s.jack_id) ?? null })),
+  });
 }

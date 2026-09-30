@@ -1,8 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jackSkills, SkillJackError } from '@skilljack/core';
-import type { OutputFormat } from '@skilljack/core';
 import { auth } from '@clerk/nextjs/server';
 import { getSupabase } from '@/lib/supabase';
+import { generateShareId } from '@/lib/share-id';
+import { getOrCreateUser, type AppUser } from '@/lib/users';
+import { ensureUsageRow, refundJack, reserveJack, tierLimit } from '@/lib/usage-server';
+import { hashClaimToken, newClaimToken } from '@/lib/claim-token';
+import { skillDescription, videoIdFromUrl, type JackSkillRow } from '@/lib/jack-view';
+import { toJackView, type JackRow } from '@/lib/jacks-server';
+
+const ANONYMOUS_JACK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// The Privacy Policy promises unclaimed signed-out results are deleted after
+// 7 days. There is no scheduler, so every jack sweeps the expired ones.
+async function deleteStaleAnonymousJacks(): Promise<void> {
+  const cutoff = new Date(Date.now() - ANONYMOUS_JACK_TTL_MS).toISOString();
+  const { error } = await getSupabase().from('jacks').delete().is('user_id', null).lt('created_at', cutoff);
+  if (error) console.error('[/api/jack] Anonymous cleanup failed:', error);
+}
 
 // Extraction does multiple sequential Claude calls: one segmenter call
 // (own internal abort at 110s, streamed with a 32k token budget so
@@ -41,7 +56,7 @@ function isRateLimited(ip: string): boolean {
 }
 
 // --- Fix 4: Request body size cap ---
-const MAX_BODY_BYTES = 1024; // 1KB — sufficient for URL + format
+const MAX_BODY_BYTES = 1024; // 1KB — plenty for a URL
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,14 +78,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let body: { url?: string; format?: string };
+    let body: { url?: string };
     try {
       body = JSON.parse(rawBody);
     } catch {
       return NextResponse.json({ error: 'Invalid JSON.' }, { status: 400 });
     }
 
-    const { url, format: rawFormat } = body;
+    const { url } = body;
 
     if (!url || typeof url !== 'string') {
       return NextResponse.json(
@@ -79,150 +94,106 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const VALID_FORMATS: OutputFormat[] = ['claude-skill', 'cursor-rules', 'windsurf-rules'];
-    const format: OutputFormat = VALID_FORMATS.includes(rawFormat as OutputFormat)
-      ? (rawFormat as OutputFormat)
-      : 'claude-skill';
+    const { userId: clerkId } = await auth();
+    let user: AppUser | null = null;
 
-    // --- Usage enforcement for signed-in users ---
-    const { userId } = await auth();
-    let supabaseUserId: string | null = null;
-
-    if (userId) {
-      const supabase = getSupabase();
-      const now = new Date();
-      const periodStart = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        1
-      ).toISOString();
-
-      const { data: user } = await supabase
-        .from('users')
-        .select('id, tier')
-        .eq('clerk_id', userId)
-        .single();
-
-      if (user) {
-        supabaseUserId = user.id;
-        const tier = user.tier || 'free';
-        const limit = tier === 'pro' ? 50 : 3;
-
-        // Find or create usage record for current month
-        let { data: usage } = await supabase
-          .from('usage')
-          .select('jacks_used, jacks_limit')
-          .eq('user_id', user.id)
-          .eq('period_start', periodStart)
-          .single();
-
-        if (!usage) {
-          const periodEnd = new Date(
-            now.getFullYear(),
-            now.getMonth() + 1,
-            1
-          ).toISOString();
-
-          const { data: created } = await supabase
-            .from('usage')
-            .insert({
-              user_id: user.id,
-              jacks_used: 0,
-              jacks_limit: limit,
-              period_start: periodStart,
-              period_end: periodEnd,
-            })
-            .select('jacks_used, jacks_limit')
-            .single();
-
-          usage = created;
-        }
-
-        if (usage && usage.jacks_used >= usage.jacks_limit) {
-          return NextResponse.json(
-            {
-              error:
-                "You've used all your videos for this month. Upgrade to Pro for more.",
-              upgrade: true,
-            },
-            { status: 402 }
-          );
-        }
+    // --- Reserve one of this month's videos before spending AI budget ---
+    if (clerkId) {
+      user = await getOrCreateUser(clerkId);
+      if (!user || !(await ensureUsageRow(user.id, tierLimit(user.tier)))) {
+        return NextResponse.json({ error: 'Could not check your usage. Please try again.' }, { status: 500 });
+      }
+      if (!(await reserveJack(user.id))) {
+        return NextResponse.json(
+          { error: "You've used all your videos for this month. Upgrade to Pro for more.", upgrade: true },
+          { status: 402 },
+        );
       }
     }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       console.error('[/api/jack] Missing ANTHROPIC_API_KEY');
+      if (user) await refundJack(user.id);
       return NextResponse.json(
         { error: 'Server configuration error.' },
         { status: 500 }
       );
     }
 
-    const results = await jackSkills(url, {
-      format,
-      apiKey,
-      count: 10,
-      concurrency: 3,
-      extraction: {
+    let results: Awaited<ReturnType<typeof jackSkills>>;
+    try {
+      results = await jackSkills(url, {
+        apiKey,
+        count: 10,
+        concurrency: 3,
+        extraction: {
+          onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
+          supadataApiKey: process.env.SUPADATA_API_KEY,
+        },
         onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
-        supadataApiKey: process.env.SUPADATA_API_KEY,
-      },
-      onDebug: (msg) => console.log(`[/api/jack] ${msg}`),
-      onSkip: (msg) => console.log(`[/api/jack] ${msg}`),
-    });
+        onSkip: (msg) => console.log(`[/api/jack] ${msg}`),
+      });
+    } catch (err) {
+      if (user) await refundJack(user.id);
+      throw err;
+    }
 
     console.log(`[/api/jack] Success: ${results.length} skills from ${url}`);
 
-    // --- Increment usage only when the jack produced something ---
-    // A zero-skill result is shown to the user as a failure, so it must not
-    // cost them one of their monthly videos.
-    if (userId && supabaseUserId && results.length > 0) {
-      try {
-        const supabase = getSupabase();
-        const now = new Date();
-        const periodStart = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          1
-        ).toISOString();
-
-        // Read current usage then increment
-        const { data: currentUsage } = await supabase
-          .from('usage')
-          .select('id, jacks_used')
-          .eq('user_id', supabaseUserId)
-          .eq('period_start', periodStart)
-          .single();
-
-        if (currentUsage) {
-          await supabase
-            .from('usage')
-            .update({ jacks_used: currentUsage.jacks_used + 1 })
-            .eq('id', currentUsage.id);
-        }
-      } catch (usageErr) {
-        // Log but don't fail the request — the extraction already succeeded
-        console.error('[/api/jack] Failed to increment usage:', usageErr);
-      }
+    // A zero-skill result is shown as a failure, so it must not cost a video.
+    if (results.length === 0) {
+      if (user) await refundJack(user.id);
+      return NextResponse.json({ jack: null });
     }
 
+    // --- Store the jack. Nothing reaches the library until the user saves. ---
+    const supabase = getSupabase();
+    const first = results[0].skill;
+    const claimToken = user ? undefined : newClaimToken();
+
+    const { data: jackRow, error: jackError } = await supabase
+      .from('jacks')
+      .insert({
+        user_id: user?.id ?? null,
+        claim_token_hash: claimToken ? hashClaimToken(claimToken) : null,
+        share_id: generateShareId(),
+        source_title: first.sourceTitle,
+        source_url: first.sourceUrl,
+        source_video_id: videoIdFromUrl(first.sourceUrl),
+        source_channel: first.sourceChannel ?? null,
+      })
+      .select('*')
+      .single();
+
+    const { data: skillRows, error: skillsError } = jackRow
+      ? await supabase
+          .from('jack_skills')
+          .insert(
+            results.map((r, position) => ({
+              jack_id: jackRow.id,
+              position,
+              name: r.skill.name,
+              description: skillDescription(r.skill.content),
+              content: r.skill.content,
+            })),
+          )
+          .select('id, position, name, description, content, saved_skill_id')
+      : { data: null, error: null };
+
+    if (jackError || skillsError || !jackRow || !skillRows) {
+      console.error('[/api/jack] Failed to store jack:', jackError ?? skillsError);
+      if (user) await refundJack(user.id);
+      return NextResponse.json(
+        { error: "We couldn't store your results. This didn't use one of your videos. Please try again." },
+        { status: 500 },
+      );
+    }
+
+    await deleteStaleAnonymousJacks();
+
     return NextResponse.json({
-      skills: results.map((r) => ({
-        skill: {
-          name: r.skill.name,
-          sourceTitle: r.skill.sourceTitle,
-          sourceUrl: r.skill.sourceUrl,
-          generatedAt: r.skill.generatedAt,
-          content: r.skill.content,
-        },
-        formatted: {
-          content: r.formatted.content,
-          filename: r.formatted.filename,
-          format: r.formatted.format,
-        },
-      })),
+      jack: { ...toJackView(jackRow as JackRow, skillRows as JackSkillRow[], user !== null), claimToken },
     });
   } catch (err: unknown) {
     // --- Fix 7: Only expose SkillJackError messages, sanitize the rest ---

@@ -1,5 +1,6 @@
 export interface RawContent {
   title: string;
+  channel?: string;
   transcript: string;
   duration: string;
   sourceUrl: string;
