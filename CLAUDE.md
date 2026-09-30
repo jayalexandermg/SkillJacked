@@ -49,6 +49,8 @@ core/src/
     index.ts          — transform(rawContent) → StructuredSkill (single-skill path)
     segmenter.ts      — segmentTranscript() — LLM call that splits transcript into skill topics
     skill-generator.ts — generateSkillsFromPlan() — concurrent per-segment LLM calls
+    frontmatter.ts    — sanitizeSkillName() / setFrontmatterName() — keep `name:` equal to the skill's folder
+    frontmatter.test.ts — Unit tests for frontmatter.ts
     validators/skill-md.ts — validateSkillMarkdown() — check output has required sections
     write-skill-pack.ts — Write skills + INDEX.md to disk
     write-skill-pack.test.ts — Unit tests for INDEX.md segment → directory linking
@@ -244,15 +246,16 @@ web/src/
   lib/
     supabase.ts    — Lazy-initialized server Supabase client (service role)
     stripe.ts      — Lazy-initialized Stripe client
-    storage.ts     — Skill persistence helpers
     usage-tracker.ts — Jack usage counter
     api-client.ts  — Browser-side API fetch helpers
     client-formatter.ts — Client-side format conversion
     client-skill-store.ts — Browser-side skill cache for the landing page
     share-id.ts     — generateShareId() / isValidShareId() — 10-char, 64-symbol, 60-bit ids
     share-id.test.ts — Unit tests for share-id.ts
-    export-zip.ts    — resolveFilenames() / buildSkillsZip() / downloadBlob() — client-side ZIP export
-    export-zip.test.ts — Unit tests for export-zip.ts
+    skill-package.ts — skillFolderName() / packageSkills() — `<name>/SKILL.md` layout, collision-safe
+    skill-package.test.ts — Unit tests for skill-package.ts
+    export-zip.ts    — buildSkillsZip() / downloadSkill() / downloadBlob() — client-side ZIP downloads
+    export-zip.test.ts — Round-trips a built ZIP to check its folder layout
   middleware.ts    — Clerk auth middleware (protects /dashboard, /settings)
   styles/globals.css
 ```
@@ -303,10 +306,22 @@ what makes `{ reset: true }` restore the originally generated skill rather than 
 Bulk export is entirely client-side: `lib/export-zip.ts` builds a ZIP in the browser
 (`buildSkillsZip()`, dynamic `jszip` import) from skills already in memory on the dashboard —
 no server route, since uploading content only to receive it back would waste the serverless
-budget. `resolveFilenames()` suffixes colliding `slug + format` pairs so a zip never silently
-drops a same-named file. Both features are Pro-gated in `dashboard/page.tsx`'s UI (selection
+budget. Both features are Pro-gated in `dashboard/page.tsx`'s UI (selection
 checkboxes and the edit button are only wired up when `tier === 'pro'`); free users see an
 upgrade prompt in place of the bulk-export control.
+
+### Skill downloads
+
+Claude Code (and every Agent Skills tool) only loads a skill from `<name>/SKILL.md`, where the
+folder equals the frontmatter `name:` — a loose `<name>.md` is silently ignored. So every web
+download is a ZIP of folders: a single skill downloads as `<name>.zip` holding `<name>/SKILL.md`
+(`downloadSkill()`, landing page and library card), and the Pro bulk export uses the same layout.
+`lib/skill-package.ts` decides the folder: the frontmatter `name:` if present (a Pro edit may have
+changed it), else the slug, kebab-cased and capped at 64 chars; collisions get `-2`, `-3`, and the
+suffix is written back into `name:` so folder and name never disagree. Core enforces the same rule
+at generation time (`transformer/frontmatter.ts`), so new skills already match; the web layer
+re-enforces it for edited and pre-fix library rows. Copy-to-clipboard copies the SKILL.md text
+only. `install-guide.tsx` gives the exact path and one-line unzip commands.
 
 ### Account settings (`/settings`)
 
@@ -448,8 +463,8 @@ pnpm test       # or: pnpm -r test — runs every package's test script
 ```
 
 Tests are plain `tsx`-run scripts (no test framework), each printing `PASS`/`FAIL` per
-assertion and exiting non-zero on any failure: `packages/core` runs `url-parser.test.ts` and `write-skill-pack.test.ts`;
-`packages/web` runs `share-id.test.ts` and `export-zip.test.ts`. `.github/workflows/ci.yml` runs
+assertion and exiting non-zero on any failure: `packages/core` runs `url-parser.test.ts`, `write-skill-pack.test.ts` and `frontmatter.test.ts`;
+`packages/web` runs `share-id.test.ts`, `skill-package.test.ts` and `export-zip.test.ts`. `.github/workflows/ci.yml` runs
 on every PR and push to `main`: install (frozen lockfile) → `pnpm -r build` → `pnpm -r test` →
 assert the test output actually contains passing results (so a package that silently lost its
 test script still fails CI) → smoke test the built CLI. It supplies well-formed dummy env vars

@@ -125,7 +125,8 @@ export default function PricingPage() {
               <ul className="space-y-3 mb-8 flex-1">
                 <Feature>50 skill extractions / month</Feature>
                 <Feature>Everything in Free</Feature>
-                <Feature>Priority extraction queue</Feature>
+                <Feature>Edit your skills</Feature>
+                <Feature>Bulk export your library as a ZIP</Feature>
                 <Feature>Manage billing via Stripe portal</Feature>
               </ul>
 

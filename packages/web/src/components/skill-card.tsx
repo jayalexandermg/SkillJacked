@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { downloadSkill } from '@/lib/export-zip';
 
 interface SkillCardProps {
   id: string;
@@ -9,7 +10,7 @@ interface SkillCardProps {
   generatedAt: string;
   format: string;
   content: string;
-  filename: string;
+  slug: string;
   onDelete?: (id: string) => void;
   isEdited?: boolean;
   /** Selection is only rendered when the library passes a handler for it. */
@@ -31,7 +32,7 @@ export default function SkillCard({
   generatedAt,
   format,
   content,
-  filename,
+  slug,
   onDelete,
   isEdited = false,
   selected = false,
@@ -41,15 +42,7 @@ export default function SkillCard({
   const [copied, setCopied] = useState(false);
 
   const handleDownload = () => {
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadSkill({ slug, content }).catch((err) => console.error('[download] Failed:', err));
   };
 
   const handleCopy = async () => {
