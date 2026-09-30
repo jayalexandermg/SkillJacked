@@ -42,7 +42,7 @@ export default function SkillCard({
   const [copied, setCopied] = useState(false);
 
   const handleDownload = () => {
-    downloadSkill({ slug, content }).catch((err) => console.error('[download] Failed:', err));
+    downloadSkill({ slug, content, format }).catch((err) => console.error('[download] Failed:', err));
   };
 
   const handleCopy = async () => {

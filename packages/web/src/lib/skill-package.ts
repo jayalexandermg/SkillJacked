@@ -16,6 +16,7 @@ const MAX_NAME_LENGTH = 64;
 export interface ExportableSkill {
   slug: string;
   content: string;
+  format?: string | null;
 }
 
 export interface PackagedSkill {
@@ -87,4 +88,40 @@ export function packageSkills(skills: ExportableSkill[]): PackagedSkill[] {
 
 export function packageSkill(skill: ExportableSkill): PackagedSkill {
   return packageSkills([skill])[0];
+}
+
+// Library rows saved in these formats (briefly possible in early builds, and
+// still accepted by POST /api/skills) hold rules text, not a SKILL.md, so they
+// export as the flat file those tools read instead of a skill folder.
+const LEGACY_EXTENSIONS: Record<string, string> = {
+  'cursor-rules': 'cursorrules',
+  'windsurf-rules': 'windsurfrules',
+};
+
+export interface ExportEntry {
+  path: string;
+  content: string;
+}
+
+/**
+ * Where each skill goes in an export: `<name>/SKILL.md` for skills, a flat
+ * `<slug>.<ext>` for legacy rules rows. Paths are unique across the batch.
+ */
+export function exportEntries(skills: ExportableSkill[]): ExportEntry[] {
+  const packaged = packageSkills(skills.filter((skill) => !LEGACY_EXTENSIONS[skill.format ?? '']));
+  const usedFiles = new Set<string>();
+  let next = 0;
+
+  return skills.map((skill) => {
+    const ext = LEGACY_EXTENSIONS[skill.format ?? ''];
+    if (!ext) {
+      const { folder, content } = packaged[next++];
+      return { path: `${folder}/SKILL.md`, content };
+    }
+    const base = toSkillName(skill.slug) || 'rules';
+    let path = `${base}.${ext}`;
+    for (let n = 2; usedFiles.has(path); n++) path = `${withSuffix(base, n)}.${ext}`;
+    usedFiles.add(path);
+    return { path, content: skill.content };
+  });
 }

@@ -1,4 +1,4 @@
-import { sanitizeSkillName, setFrontmatterName } from './frontmatter';
+import { dedupeSkillNames, sanitizeSkillName, setFrontmatterName } from './frontmatter';
 
 let passed = 0;
 let failed = 0;
@@ -38,6 +38,14 @@ check(
   setFrontmatterName('---\r\nname: A B\r\ndescription: d\r\n---\r\nbody', 'a-b') ===
     '---\r\nname: a-b\r\ndescription: d\r\n---\r\nbody',
 );
+
+const sk = (name: string) => ({ name, content: doc(`name: ${name}`) });
+const deduped = dedupeSkillNames([sk('same'), sk('same'), sk('same-2')]);
+check('repeated names get distinct suffixes', new Set(deduped.map((s) => s.name)).size === 3);
+check('a renamed skill has a matching name: line', deduped.every((s) => s.content.includes(`name: ${s.name}\n`)));
+check('unique names are left untouched', dedupeSkillNames([sk('a'), sk('b')]).map((s) => s.name).join() === 'a,b');
+const long = 'a'.repeat(64);
+check('suffixed capped names stay within 64 chars', dedupeSkillNames([sk(long), sk(long)]).every((s) => s.name.length <= 64));
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

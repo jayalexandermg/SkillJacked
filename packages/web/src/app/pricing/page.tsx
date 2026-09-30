@@ -17,6 +17,7 @@ export default function PricingPage() {
 
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState(false);
 
   useEffect(() => {
     if (!isLoaded || !signedIn) return;
@@ -30,19 +31,20 @@ export default function PricingPage() {
 
   const handleCheckout = async () => {
     setCheckoutLoading(true);
+    setCheckoutError(false);
     try {
       const res = await fetch('/api/checkout', { method: 'POST' });
       if (res.ok) {
         const { url } = await res.json();
         window.location.href = url;
-      } else {
-        console.error('[checkout] Failed:', res.status);
-        setCheckoutLoading(false);
+        return;
       }
+      console.error('[checkout] Failed:', res.status);
     } catch (err) {
       console.error('[checkout] Error:', err);
-      setCheckoutLoading(false);
     }
+    setCheckoutError(true);
+    setCheckoutLoading(false);
   };
 
   return (
@@ -84,7 +86,7 @@ export default function PricingPage() {
               </div>
 
               <ul className="space-y-3 mb-8 flex-1">
-                <Feature>3 skill extractions / month</Feature>
+                <Feature>3 videos / month, up to 10 skills each</Feature>
                 <Feature>Hosted web app</Feature>
                 <Feature>Cloud-synced skill library</Feature>
                 <Feature>BYOK CLI (bring your own Anthropic key)</Feature>
@@ -123,7 +125,7 @@ export default function PricingPage() {
               </div>
 
               <ul className="space-y-3 mb-8 flex-1">
-                <Feature>50 skill extractions / month</Feature>
+                <Feature>50 videos / month, up to 10 skills each</Feature>
                 <Feature>Everything in Free</Feature>
                 <Feature>Edit your skills</Feature>
                 <Feature>Bulk export your library as a ZIP</Feature>
@@ -150,6 +152,12 @@ export default function PricingPage() {
                 >
                   {checkoutLoading ? 'Redirecting...' : 'Upgrade to Pro'}
                 </button>
+              )}
+              {checkoutError && (
+                <p role="alert" className="mt-3 text-center text-error text-xs">
+                  Couldn&apos;t start checkout. Please try again, or email admin@skilljacked.com if it
+                  keeps happening.
+                </p>
               )}
             </div>
           </div>

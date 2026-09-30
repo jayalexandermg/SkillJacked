@@ -11,13 +11,22 @@ export default function Footer() {
           </span>
         </div>
 
-        <div className="flex items-center gap-6">
-          <a
-            href="/pricing"
-            className="text-text-secondary hover:text-text-primary text-sm transition-colors duration-200"
-          >
-            Pricing
-          </a>
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+          {[
+            ['Pricing', '/pricing'],
+            ['Terms', '/terms'],
+            ['Privacy', '/privacy'],
+            ['Refunds', '/refunds'],
+            ['Contact', '/contact'],
+          ].map(([label, href]) => (
+            <a
+              key={href}
+              href={href}
+              className="text-text-secondary hover:text-text-primary text-sm transition-colors duration-200"
+            >
+              {label}
+            </a>
+          ))}
           <a
             href="https://github.com/jayalexandermg/SkillJacked"
             target="_blank"

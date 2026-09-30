@@ -5,6 +5,7 @@ import Footer from '@/components/footer';
 import { getSupabase } from '@/lib/supabase';
 import { isValidShareId } from '@/lib/share-id';
 import { skillFolderName } from '@/lib/skill-package';
+import { cleanSourceUrl } from '@/lib/source-url';
 
 // This route renders on demand (no generateStaticParams, and the Supabase
 // client is constructed per request), so unsharing takes effect immediately.
@@ -107,7 +108,7 @@ export default async function SharedExtractionPage({
   if (!skills) notFound();
 
   const sourceTitle = skills[0].source_title || 'Unknown source';
-  const sourceUrl = skills[0].source_url;
+  const sourceUrl = skills[0].source_url ? cleanSourceUrl(skills[0].source_url) : null;
   const extractedOn = new Date(skills[0].created_at).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',

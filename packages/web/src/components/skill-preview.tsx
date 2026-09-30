@@ -12,34 +12,60 @@ interface SkillPreviewProps {
   previewMode?: 'full' | 'partial' | 'locked';
 }
 
-function getLineClass(line: string, index: number): string {
-  if (line.startsWith('---')) {
-    return 'text-accent font-semibold';
-  }
+type LineKind = 'fence' | 'key' | 'frontmatter' | 'heading' | 'list' | 'body';
 
-  if (line.startsWith('#')) {
-    return 'text-accent font-semibold';
-  }
+const KEY_LINE = /^([A-Za-z_][\w-]*:)(.*)$/;
 
-  if (line.startsWith('- ') || line.startsWith('* ')) {
-    return 'text-text-primary';
-  }
+/**
+ * Classify every line once, over the whole file, so the frontmatter block is
+ * found by its fences rather than guessed from line position. Preview modes
+ * slice the result, and a slice must not change how a line is coloured.
+ */
+function classifyLines(lines: string[]): LineKind[] {
+  const closing = lines[0]?.trim() === '---'
+    ? lines.findIndex((line, i) => i > 0 && line.trim() === '---')
+    : -1;
 
-  if (line.includes(':') && !line.startsWith(' ') && index < 10) {
-    return 'text-text-primary';
-  }
-
-  return 'text-text-secondary';
+  return lines.map((line, i) => {
+    if (closing > 0 && i <= closing) {
+      if (i === 0 || i === closing) return 'fence';
+      return KEY_LINE.test(line) ? 'key' : 'frontmatter';
+    }
+    if (line.startsWith('#')) return 'heading';
+    if (/^\s*([-*]|\d+\.)\s/.test(line)) return 'list';
+    return 'body';
+  });
 }
 
-function renderFormattedLines(lines: string[], limit?: number) {
-  const visibleLines = typeof limit === 'number' ? lines.slice(0, limit) : lines;
+const KIND_CLASS: Record<Exclude<LineKind, 'key'>, string> = {
+  fence: 'text-accent font-semibold',
+  frontmatter: 'text-text-primary',
+  heading: 'text-text-primary font-semibold',
+  list: 'text-text-primary',
+  body: 'text-text-secondary',
+};
 
-  return visibleLines.map((line, index) => (
-    <div key={`${index}-${line}`} className={getLineClass(line, index)}>
-      {line || '\u00A0'}
-    </div>
-  ));
+function renderFormattedLines(lines: string[], kinds: LineKind[], start = 0, end?: number) {
+  return lines.slice(start, end).map((line, offset) => {
+    const kind = kinds[start + offset];
+    const key = `${start + offset}-${line}`;
+
+    if (kind === 'key') {
+      const [, name, value] = line.match(KEY_LINE) ?? [];
+      return (
+        <div key={key}>
+          <span className="text-accent">{name}</span>
+          <span className="text-text-primary">{value}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div key={key} className={KIND_CLASS[kind]}>
+        {line || '\u00A0'}
+      </div>
+    );
+  });
 }
 
 export default function SkillPreview({
@@ -54,6 +80,7 @@ export default function SkillPreview({
   previewMode = 'full',
 }: SkillPreviewProps) {
   const lines = content.split('\n');
+  const kinds = classifyLines(lines);
   const gatedValueClass =
     previewMode === 'locked'
       ? 'blur-sm opacity-35 select-none pointer-events-none'
@@ -128,22 +155,22 @@ export default function SkillPreview({
         <div className="p-5 max-h-96 overflow-y-auto">
           {previewMode === 'locked' ? (
             <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap break-words blur-md select-none pointer-events-none opacity-30">
-              {renderFormattedLines(lines, 12)}
+              {renderFormattedLines(lines, kinds, 0, 12)}
             </pre>
           ) : previewMode === 'partial' ? (
             <>
               <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap break-words">
-                {renderFormattedLines(lines, 3)}
+                {renderFormattedLines(lines, kinds, 0, 3)}
               </pre>
               <div className="relative mt-2">
                 <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap break-words blur-sm select-none pointer-events-none opacity-40">
-                  {renderFormattedLines(lines.slice(3, 15))}
+                  {renderFormattedLines(lines, kinds, 3, 15)}
                 </pre>
               </div>
             </>
           ) : (
             <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap break-words">
-              {renderFormattedLines(lines)}
+              {renderFormattedLines(lines, kinds)}
             </pre>
           )}
         </div>

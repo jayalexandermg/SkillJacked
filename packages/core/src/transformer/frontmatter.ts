@@ -1,5 +1,6 @@
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
 const NAME_LINE = /^name:.*$/m;
+const MAX_NAME_LENGTH = 64;
 
 // Skill names become directory names, and the Agent Skills spec caps them at
 // 64 chars of lowercase kebab-case.
@@ -8,7 +9,7 @@ export function sanitizeSkillName(raw: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '-')
     .replace(/-+/g, '-')
-    .slice(0, 64)
+    .slice(0, MAX_NAME_LENGTH)
     .replace(/^-|-$/g, '');
   return slug || `skill-${Date.now()}`;
 }
@@ -33,4 +34,26 @@ export function setFrontmatterName(md: string, name: string): string {
     : `name: ${name}\n${body}`;
 
   return md.slice(0, start) + nextBody + md.slice(start + body.length);
+}
+
+function withSuffix(base: string, n: number): string {
+  const suffix = `-${n}`;
+  return base.slice(0, MAX_NAME_LENGTH - suffix.length).replace(/-$/, '') + suffix;
+}
+
+/**
+ * Give every skill in one run a distinct name. The model can name two
+ * segments alike, and the 64-char cap can merge names that differ only
+ * later on; the CLI writes each skill to `<name>/SKILL.md`, so a repeat
+ * would silently overwrite the earlier skill. The suffix goes into `name:`
+ * too, keeping the file and its folder in agreement.
+ */
+export function dedupeSkillNames<T extends { name: string; content: string }>(skills: T[]): T[] {
+  const used = new Set<string>();
+  return skills.map((skill) => {
+    let name = skill.name;
+    for (let n = 2; used.has(name); n++) name = withSuffix(skill.name, n);
+    used.add(name);
+    return name === skill.name ? skill : { ...skill, name, content: setFrontmatterName(skill.content, name) };
+  });
 }

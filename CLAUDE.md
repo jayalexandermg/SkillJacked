@@ -49,7 +49,7 @@ core/src/
     index.ts          — transform(rawContent) → StructuredSkill (single-skill path)
     segmenter.ts      — segmentTranscript() — LLM call that splits transcript into skill topics
     skill-generator.ts — generateSkillsFromPlan() — concurrent per-segment LLM calls
-    frontmatter.ts    — sanitizeSkillName() / setFrontmatterName() — keep `name:` equal to the skill's folder
+    frontmatter.ts    — sanitizeSkillName() / setFrontmatterName() / dedupeSkillNames() — keep `name:` equal to a unique folder
     frontmatter.test.ts — Unit tests for frontmatter.ts
     validators/skill-md.ts — validateSkillMarkdown() — check output has required sections
     write-skill-pack.ts — Write skills + INDEX.md to disk
@@ -69,7 +69,7 @@ core/src/
     retry.ts          — withRetry() — exponential backoff for LLM calls
     concurrency.ts    — createLimiter() — cap concurrent API calls
     dedup.ts          — dedupSegments() — remove overlapping segments
-    url-parser.ts     — parseUrl() — extract YouTube video ID
+    url-parser.ts     — parseUrl() — extract YouTube video ID; returns a canonical watch URL (drops `si` tracking)
     url-parser.test.ts — Unit tests for parseUrl()
 ```
 
@@ -222,6 +222,7 @@ web/src/
     sign-in/[[...sign-in]]/     — Clerk sign-in page
     sign-up/[[...sign-up]]/     — Clerk sign-up page
     j/[shareId]/page.tsx        — Public, unauthenticated permalink for one shared extraction
+    terms/, privacy/, refunds/, contact/ — Legal pages (see Legal pages below)
     api/
       jack/route.ts             — POST: extract skills from YouTube URL
       skills/route.ts           — GET: list user's skills; POST: save skills (mints share_id)
@@ -242,20 +243,24 @@ web/src/
     format-toggle.tsx           — Claude/Cursor/Windsurf format switcher
     download-bar.tsx, loading-state.tsx
     how-it-works.tsx, install-guide.tsx
-    footer.tsx, coming-soon.tsx
+    footer.tsx, coming-soon.tsx — Footer (links to pricing + legal pages); "What's next"
+    legal-page.tsx              — Shared layout for the legal pages
   lib/
     supabase.ts    — Lazy-initialized server Supabase client (service role)
+    legal.ts       — Operator, governing state, contact email, last-updated date for the legal pages
     stripe.ts      — Lazy-initialized Stripe client
-    usage-tracker.ts — Jack usage counter
+    usage-tracker.ts — Tier limits + videosLeft(): the one user-facing usage wording ("2 of 3 videos left this month")
     api-client.ts  — Browser-side API fetch helpers
     client-formatter.ts — Client-side format conversion
     client-skill-store.ts — Browser-side skill cache for the landing page
     share-id.ts     — generateShareId() / isValidShareId() — 10-char, 64-symbol, 60-bit ids
     share-id.test.ts — Unit tests for share-id.ts
-    skill-package.ts — skillFolderName() / packageSkills() — `<name>/SKILL.md` layout, collision-safe
+    skill-package.ts — skillFolderName() / packageSkills() / exportEntries() — `<name>/SKILL.md` layout, collision-safe
     skill-package.test.ts — Unit tests for skill-package.ts
     export-zip.ts    — buildSkillsZip() / downloadSkill() / downloadBlob() — client-side ZIP downloads
     export-zip.test.ts — Round-trips a built ZIP to check its folder layout
+    source-url.ts    — cleanSourceUrl() — strips `si` from links stored before URLs were canonical
+    source-url.test.ts — Unit tests for source-url.ts
   middleware.ts    — Clerk auth middleware (protects /dashboard, /settings)
   styles/globals.css
 ```
@@ -270,7 +275,7 @@ Flow:
 3. Validate URL input and format
 4. If user is authenticated (Clerk): check monthly jack limit, return 402 if exceeded
 5. Run `jackSkills()` from `@skilljack/core` with `count: 10, concurrency: 3`. If the first segment+generate pass yields zero skills, `jackSkills()` retries once with a fresh segmenter call
-6. If authenticated: increment `usage.jacks_used` in Supabase (non-fatal if this fails)
+6. If authenticated and at least one skill came back: increment `usage.jacks_used` in Supabase (non-fatal if this fails). A zero-skill jack is shown as a failure, so it is never charged
 7. Return array of `{ skill, formatted }` objects
 
 ### Public share links (`/j/[shareId]`)
@@ -319,9 +324,22 @@ download is a ZIP of folders: a single skill downloads as `<name>.zip` holding `
 `lib/skill-package.ts` decides the folder: the frontmatter `name:` if present (a Pro edit may have
 changed it), else the slug, kebab-cased and capped at 64 chars; collisions get `-2`, `-3`, and the
 suffix is written back into `name:` so folder and name never disagree. Core enforces the same rule
-at generation time (`transformer/frontmatter.ts`), so new skills already match; the web layer
-re-enforces it for edited and pre-fix library rows. Copy-to-clipboard copies the SKILL.md text
+at generation time (`transformer/frontmatter.ts`: `setFrontmatterName()`, plus `dedupeSkillNames()`
+so one run never produces two skills with the same folder), so new skills already match; the web
+layer re-enforces it for edited and pre-fix library rows. Library rows whose `format` is
+`cursor-rules`/`windsurf-rules` hold rules text, not a SKILL.md (early builds saved formatted
+content), so `exportEntries()` exports them as flat `<slug>.cursorrules`/`.windsurfrules` files. Copy-to-clipboard copies the SKILL.md text
 only. `install-guide.tsx` gives the exact path and one-line unzip commands.
+
+### Legal pages
+
+`/terms`, `/privacy`, `/refunds` and `/contact` are public server pages built on
+`components/legal-page.tsx`. The facts they depend on (operator, governing state, contact email,
+last-updated date) live in `lib/legal.ts`, so incorporating means editing one file. The Privacy Policy
+makes factual claims about the code: no analytics, transcripts not stored, IPs only held in memory,
+the list of processors (Clerk, Supabase, Stripe, Anthropic, Supadata, Vercel). **Any change to data
+handling must update `privacy/page.tsx` in the same PR.** Account deletion is by email request (there is
+no in-app flow, and the Clerk webhook does not cascade deletes), and the policy promises it within 30 days.
 
 ### Account settings (`/settings`)
 
@@ -385,6 +403,10 @@ must be applied before the code that depends on their columns is deployed.
 The jack limit is resolved as `tier === 'pro' ? 50 : 3` in `/api/jack` and `/api/usage`, with a
 per-row `usage.jacks_limit` override. There is no unlimited tier. Editing and export are gated
 the same way, on `users.tier` read fresh from Supabase, never cached or read from Clerk.
+
+Every Upgrade button links to `/pricing`; the pricing page's Pro button is the only path into
+Stripe Checkout, so nobody reaches payment without seeing the price. Usage is always worded with
+`videosLeft()` ("N of M videos left this month"), for free and Pro users alike.
 
 ### Environment variables
 
@@ -464,7 +486,7 @@ pnpm test       # or: pnpm -r test — runs every package's test script
 
 Tests are plain `tsx`-run scripts (no test framework), each printing `PASS`/`FAIL` per
 assertion and exiting non-zero on any failure: `packages/core` runs `url-parser.test.ts`, `write-skill-pack.test.ts` and `frontmatter.test.ts`;
-`packages/web` runs `share-id.test.ts`, `skill-package.test.ts` and `export-zip.test.ts`. `.github/workflows/ci.yml` runs
+`packages/web` runs `share-id.test.ts`, `skill-package.test.ts`, `export-zip.test.ts` and `source-url.test.ts`. `.github/workflows/ci.yml` runs
 on every PR and push to `main`: install (frozen lockfile) → `pnpm -r build` → `pnpm -r test` →
 assert the test output actually contains passing results (so a package that silently lost its
 test script still fails CI) → smoke test the built CLI. It supplies well-formed dummy env vars

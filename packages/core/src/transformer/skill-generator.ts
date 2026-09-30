@@ -7,7 +7,7 @@ import { TransformError, type TransformErrorDetails } from '../utils/errors';
 import { normalizeTranscript } from './normalize-transcript';
 import { withRetry, type RetryOpts } from '../utils/retry';
 import { createLimiter } from '../utils/concurrency';
-import { sanitizeSkillName, setFrontmatterName } from './frontmatter';
+import { dedupeSkillNames, sanitizeSkillName, setFrontmatterName } from './frontmatter';
 
 const ANTHROPIC_TIMEOUT_MS = 60_000; // 60s
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
@@ -277,5 +277,5 @@ export async function generateSkillsFromPlan(
     }
   }
 
-  return { skills, skipped };
+  return { skills: dedupeSkillNames(skills), skipped };
 }

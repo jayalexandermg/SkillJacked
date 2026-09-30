@@ -27,11 +27,12 @@ let failed = 0;
 for (const tc of cases) {
   try {
     const result = parseUrl(tc.input);
-    if (result.videoId === tc.expectedId) {
+    const canonical = `https://www.youtube.com/watch?v=${tc.expectedId}`;
+    if (result.videoId === tc.expectedId && result.url === canonical) {
       console.log(`  PASS  ${tc.label}`);
       passed++;
     } else {
-      console.log(`  FAIL  ${tc.label}: expected ${tc.expectedId}, got ${result.videoId}`);
+      console.log(`  FAIL  ${tc.label}: expected ${tc.expectedId} / ${canonical}, got ${result.videoId} / ${result.url}`);
       failed++;
     }
   } catch (e: any) {

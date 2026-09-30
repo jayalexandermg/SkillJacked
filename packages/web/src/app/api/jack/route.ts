@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json(
             {
               error:
-                'Monthly extraction limit reached. Upgrade to Pro for more.',
+                "You've used all your videos for this month. Upgrade to Pro for more.",
               upgrade: true,
             },
             { status: 402 }
@@ -175,8 +175,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`[/api/jack] Success: ${results.length} skills from ${url}`);
 
-    // --- Increment usage after successful extraction ---
-    if (userId && supabaseUserId) {
+    // --- Increment usage only when the jack produced something ---
+    // A zero-skill result is shown to the user as a failure, so it must not
+    // cost them one of their monthly videos.
+    if (userId && supabaseUserId && results.length > 0) {
       try {
         const supabase = getSupabase();
         const now = new Date();

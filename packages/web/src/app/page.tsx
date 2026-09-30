@@ -14,7 +14,7 @@ import Footer from '@/components/footer';
 import { jackSkills, type SkillData } from '@/lib/api-client';
 import { formatSkill, type Format } from '@/lib/client-formatter';
 import { skillFolderName } from '@/lib/skill-package';
-import { FREE_EXTRACTION_LIMIT } from '@/lib/usage-tracker';
+import { FREE_EXTRACTION_LIMIT, PRO_EXTRACTION_LIMIT, videosLeft } from '@/lib/usage-tracker';
 import {
   clearStoredExtraction,
   getStoredExtraction,
@@ -41,7 +41,7 @@ const formatLabels: Record<Format, string> = {
 function getGateTier(index: number, isSignedIn: boolean): SkillTier {
   if (isSignedIn) return 'full';
   if (index === 0) return 'full';
-  if (index <= 2) return 'partial';
+  if (index <= 3) return 'partial';
   return 'locked';
 }
 
@@ -76,7 +76,6 @@ export default function Home() {
   const [errorMessage, setErrorMessage] = useState('');
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
   useEffect(() => {
     const restoredSkills = getStoredExtraction();
 
@@ -187,7 +186,8 @@ export default function Home() {
 
       if (data.length === 0) {
         setErrorMessage(
-          "We couldn't extract any skills from this video. Try a different video, or one with more instructional/how-to content.",
+          "We couldn't extract any skills from this video. Try a different video, or one with more instructional/how-to content." +
+            (signedIn ? " This didn't use one of your monthly videos." : ''),
         );
         setState('error');
         return;
@@ -236,42 +236,26 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-4">
           {signedIn && usage && (
-            usage.tier === 'pro' ? (
-              <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-accent/20 text-accent">
-                Pro
-              </span>
-            ) : (
-              <>
-                <span className="text-text-tertiary text-xs font-mono">
-                  {usage.remaining}/{usage.limit} extractions left
+            <>
+              {usage.tier === 'pro' && (
+                <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-accent/20 text-accent">
+                  Pro
                 </span>
-                <button
-                  onClick={async () => {
-                    setCheckoutLoading(true);
-                    try {
-                      const res = await fetch('/api/checkout', { method: 'POST' });
-                      if (res.ok) {
-                        const { url } = await res.json();
-                        window.location.href = url;
-                      } else {
-                        console.error('[checkout] Failed:', res.status);
-                        setCheckoutLoading(false);
-                      }
-                    } catch (err) {
-                      console.error('[checkout] Error:', err);
-                      setCheckoutLoading(false);
-                    }
-                  }}
-                  disabled={checkoutLoading}
-                  className={`px-3 py-1.5 bg-accent text-primary font-body font-semibold text-xs
+              )}
+              <span className="hidden sm:inline text-text-tertiary text-xs font-mono">
+                {videosLeft(usage.used, usage.limit)}
+              </span>
+              {usage.tier !== 'pro' && (
+                <a
+                  href="/pricing"
+                  className="px-3 py-1.5 bg-accent text-primary font-body font-semibold text-xs
                              rounded-lg hover:bg-accent-hover hover:gold-glow
-                             transition-all duration-200
-                             ${checkoutLoading ? 'opacity-60 cursor-wait' : ''}`}
+                             transition-all duration-200"
                 >
-                  {checkoutLoading ? 'Redirecting...' : 'Upgrade to Pro'}
-                </button>
-              </>
-            )
+                  Upgrade to Pro
+                </a>
+              )}
+            </>
           )}
           {signedIn ? (
             <UserButton />
@@ -302,37 +286,21 @@ export default function Home() {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
               <div className="bg-surface border border-border-subtle rounded-lg p-8 max-w-md mx-4 text-center">
                 <h3 className="font-heading text-xl font-bold text-text-primary mb-3">
-                  Monthly Limit Reached
+                  No videos left this month
                 </h3>
                 <p className="text-text-secondary text-sm mb-6">
-                  You&apos;ve used all {usage?.limit ?? FREE_EXTRACTION_LIMIT} free extractions this month.
-                  Upgrade to Pro for 50 extractions/month.
+                  You&apos;ve used all {usage?.limit ?? FREE_EXTRACTION_LIMIT} free videos this month.
+                  Pro gives you {PRO_EXTRACTION_LIMIT} videos a month, up to 10 skills each.
                 </p>
                 <div className="flex flex-col gap-3">
-                  <button
-                    onClick={async () => {
-                      setCheckoutLoading(true);
-                      try {
-                        const res = await fetch('/api/checkout', { method: 'POST' });
-                        if (res.ok) {
-                          const { url } = await res.json();
-                          window.location.href = url;
-                        } else {
-                          console.error('[checkout] Failed:', res.status);
-                          setCheckoutLoading(false);
-                        }
-                      } catch (err) {
-                        console.error('[checkout] Error:', err);
-                        setCheckoutLoading(false);
-                      }
-                    }}
-                    disabled={checkoutLoading}
-                    className={`px-6 py-3 bg-accent text-primary font-body font-semibold text-sm
+                  <a
+                    href="/pricing"
+                    className="px-6 py-3 bg-accent text-primary font-body font-semibold text-sm
                                rounded-lg hover:bg-accent-hover hover:gold-glow
-                               transition-all duration-200 ${checkoutLoading ? 'opacity-60 cursor-wait' : ''}`}
+                               transition-all duration-200"
                   >
-                    {checkoutLoading ? 'Redirecting...' : 'Upgrade to Pro'}
-                  </button>
+                    Upgrade to Pro
+                  </a>
                   <button
                     onClick={() => setShowLimitModal(false)}
                     className="text-text-secondary hover:text-text-primary text-sm
@@ -575,7 +543,7 @@ export default function Home() {
 
       <div className="max-w-5xl mx-auto border-t border-border-subtle" />
 
-      <ComingSoon />
+      <ComingSoon signedIn={signedIn} />
 
       <Footer />
     </main>
