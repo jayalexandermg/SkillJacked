@@ -69,7 +69,7 @@ core/src/
     retry.ts          — withRetry() — exponential backoff for LLM calls
     concurrency.ts    — createLimiter() — cap concurrent API calls
     dedup.ts          — dedupSegments() — remove overlapping segments
-    url-parser.ts     — parseUrl() — extract YouTube video ID
+    url-parser.ts     — parseUrl() — extract YouTube video ID; returns a canonical watch URL (drops `si` tracking)
     url-parser.test.ts — Unit tests for parseUrl()
 ```
 
@@ -246,7 +246,7 @@ web/src/
   lib/
     supabase.ts    — Lazy-initialized server Supabase client (service role)
     stripe.ts      — Lazy-initialized Stripe client
-    usage-tracker.ts — Jack usage counter
+    usage-tracker.ts — Tier limits + videosLeft(): the one user-facing usage wording ("2 of 3 videos left this month")
     api-client.ts  — Browser-side API fetch helpers
     client-formatter.ts — Client-side format conversion
     client-skill-store.ts — Browser-side skill cache for the landing page
@@ -256,6 +256,8 @@ web/src/
     skill-package.test.ts — Unit tests for skill-package.ts
     export-zip.ts    — buildSkillsZip() / downloadSkill() / downloadBlob() — client-side ZIP downloads
     export-zip.test.ts — Round-trips a built ZIP to check its folder layout
+    source-url.ts    — cleanSourceUrl() — strips `si` from links stored before URLs were canonical
+    source-url.test.ts — Unit tests for source-url.ts
   middleware.ts    — Clerk auth middleware (protects /dashboard, /settings)
   styles/globals.css
 ```
@@ -270,7 +272,7 @@ Flow:
 3. Validate URL input and format
 4. If user is authenticated (Clerk): check monthly jack limit, return 402 if exceeded
 5. Run `jackSkills()` from `@skilljack/core` with `count: 10, concurrency: 3`. If the first segment+generate pass yields zero skills, `jackSkills()` retries once with a fresh segmenter call
-6. If authenticated: increment `usage.jacks_used` in Supabase (non-fatal if this fails)
+6. If authenticated and at least one skill came back: increment `usage.jacks_used` in Supabase (non-fatal if this fails). A zero-skill jack is shown as a failure, so it is never charged
 7. Return array of `{ skill, formatted }` objects
 
 ### Public share links (`/j/[shareId]`)
@@ -386,6 +388,10 @@ The jack limit is resolved as `tier === 'pro' ? 50 : 3` in `/api/jack` and `/api
 per-row `usage.jacks_limit` override. There is no unlimited tier. Editing and export are gated
 the same way, on `users.tier` read fresh from Supabase, never cached or read from Clerk.
 
+Every Upgrade button links to `/pricing`; the pricing page's Pro button is the only path into
+Stripe Checkout, so nobody reaches payment without seeing the price. Usage is always worded with
+`videosLeft()` ("N of M videos left this month"), for free and Pro users alike.
+
 ### Environment variables
 
 `packages/web/env-template.txt` is a starting point but is not exhaustive — the full set the app reads is:
@@ -464,7 +470,7 @@ pnpm test       # or: pnpm -r test — runs every package's test script
 
 Tests are plain `tsx`-run scripts (no test framework), each printing `PASS`/`FAIL` per
 assertion and exiting non-zero on any failure: `packages/core` runs `url-parser.test.ts`, `write-skill-pack.test.ts` and `frontmatter.test.ts`;
-`packages/web` runs `share-id.test.ts`, `skill-package.test.ts` and `export-zip.test.ts`. `.github/workflows/ci.yml` runs
+`packages/web` runs `share-id.test.ts`, `skill-package.test.ts`, `export-zip.test.ts` and `source-url.test.ts`. `.github/workflows/ci.yml` runs
 on every PR and push to `main`: install (frozen lockfile) → `pnpm -r build` → `pnpm -r test` →
 assert the test output actually contains passing results (so a package that silently lost its
 test script still fails CI) → smoke test the built CLI. It supplies well-formed dummy env vars

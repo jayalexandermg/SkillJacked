@@ -8,6 +8,7 @@ import InstallGuide from '@/components/install-guide';
 import SkillEditModal from '@/components/skill-edit-modal';
 import { buildSkillsZip, downloadBlob } from '@/lib/export-zip';
 import Footer from '@/components/footer';
+import { videosLeft } from '@/lib/usage-tracker';
 
 interface DbSkill {
   id: string;
@@ -296,7 +297,7 @@ export default function DashboardPage() {
           {usage && (
             <div className="mt-4 p-6 bg-surface border border-border-subtle rounded-lg text-center">
               <p className="text-text-secondary text-sm mb-4">
-                {usage.used} of {usage.limit} extractions used this month
+                {videosLeft(usage.used, usage.limit)}
               </p>
               {usage.tier === 'pro' ? (
                 <button
@@ -325,31 +326,14 @@ export default function DashboardPage() {
                   {billingLoading ? 'Redirecting...' : 'Manage Subscription'}
                 </button>
               ) : (
-                <button
-                  onClick={async () => {
-                    setBillingLoading(true);
-                    try {
-                      const res = await fetch('/api/checkout', { method: 'POST' });
-                      if (res.ok) {
-                        const { url } = await res.json();
-                        window.location.href = url;
-                      } else {
-                        console.error('[checkout] Failed:', res.status);
-                        setBillingLoading(false);
-                      }
-                    } catch (err) {
-                      console.error('[checkout] Error:', err);
-                      setBillingLoading(false);
-                    }
-                  }}
-                  disabled={billingLoading}
-                  className={`px-5 py-2.5 bg-accent text-primary font-body font-semibold text-sm
+                <a
+                  href="/pricing"
+                  className="inline-block px-5 py-2.5 bg-accent text-primary font-body font-semibold text-sm
                              rounded-lg hover:bg-accent-hover hover:gold-glow
-                             transition-all duration-200
-                             ${billingLoading ? 'opacity-60 cursor-wait' : ''}`}
+                             transition-all duration-200"
                 >
-                  {billingLoading ? 'Redirecting...' : 'Upgrade to Pro'}
-                </button>
+                  Upgrade to Pro
+                </a>
               )}
             </div>
           )}

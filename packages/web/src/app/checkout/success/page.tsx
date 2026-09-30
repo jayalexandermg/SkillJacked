@@ -54,7 +54,7 @@ export default function CheckoutSuccessPage() {
           </h1>
           <p className="text-text-secondary text-base leading-relaxed mb-10">
             {isPro
-              ? `50 extractions a month, cloud-synced library, manage billing anytime.`
+              ? `50 videos a month, up to 10 skills each, and a cloud-synced library.`
               : `Your subscription is processing — your account will flip to Pro within a few seconds.`}
           </p>
 

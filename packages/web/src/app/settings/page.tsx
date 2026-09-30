@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { SignOutButton } from '@clerk/nextjs';
 import Footer from '@/components/footer';
 import type { AccountInfo } from '@/app/api/account/route';
+import { videosLeft } from '@/lib/usage-tracker';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -29,25 +30,27 @@ function Row({
 }
 
 function UsageBar({ used, limit }: { used: number; limit: number }) {
-  // A limit of 0 would divide by zero; treat it as fully consumed.
-  const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 100;
-  const depleted = used >= limit;
+  // The bar shows what's left, matching the wording. A limit of 0 would
+  // divide by zero; treat it as nothing left.
+  const remaining = Math.max(0, limit - used);
+  const pct = limit > 0 ? Math.round((remaining / limit) * 100) : 0;
+  const depleted = remaining === 0;
 
   return (
     <div className="w-full">
       <div className="flex items-baseline justify-between mb-2">
-        <span className="font-body text-sm text-text-secondary">Jacks this month</span>
-        <span className="font-mono text-sm text-text-primary">
-          {used}/{limit}
+        <span className="font-body text-sm text-text-secondary">Monthly allowance</span>
+        <span className={`font-mono text-sm ${depleted ? 'text-error' : 'text-text-primary'}`}>
+          {videosLeft(used, limit)}
         </span>
       </div>
       <div
         className="h-2 w-full rounded-full bg-surface-hover overflow-hidden"
         role="progressbar"
-        aria-valuenow={used}
+        aria-valuenow={remaining}
         aria-valuemin={0}
         aria-valuemax={limit}
-        aria-label={`${used} of ${limit} jacks used this month`}
+        aria-label={videosLeft(used, limit)}
       >
         <div
           className={`h-full rounded-full transition-all duration-500 ${
