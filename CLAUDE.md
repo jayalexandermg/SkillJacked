@@ -222,6 +222,7 @@ web/src/
     sign-in/[[...sign-in]]/     — Clerk sign-in page
     sign-up/[[...sign-up]]/     — Clerk sign-up page
     j/[shareId]/page.tsx        — Public, unauthenticated permalink for one shared extraction
+    terms/, privacy/, refunds/, contact/ — Legal pages (see Legal pages below)
     api/
       jack/route.ts             — POST: extract skills from YouTube URL
       skills/route.ts           — GET: list user's skills; POST: save skills (mints share_id)
@@ -242,9 +243,11 @@ web/src/
     format-toggle.tsx           — Claude/Cursor/Windsurf format switcher
     download-bar.tsx, loading-state.tsx
     how-it-works.tsx, install-guide.tsx
-    footer.tsx, coming-soon.tsx
+    footer.tsx, coming-soon.tsx — Footer (links to pricing + legal pages); "What's next"
+    legal-page.tsx              — Shared layout for the legal pages
   lib/
     supabase.ts    — Lazy-initialized server Supabase client (service role)
+    legal.ts       — Operator, governing state, contact email, last-updated date for the legal pages
     stripe.ts      — Lazy-initialized Stripe client
     usage-tracker.ts — Tier limits + videosLeft(): the one user-facing usage wording ("2 of 3 videos left this month")
     api-client.ts  — Browser-side API fetch helpers
@@ -327,6 +330,16 @@ layer re-enforces it for edited and pre-fix library rows. Library rows whose `fo
 `cursor-rules`/`windsurf-rules` hold rules text, not a SKILL.md (early builds saved formatted
 content), so `exportEntries()` exports them as flat `<slug>.cursorrules`/`.windsurfrules` files. Copy-to-clipboard copies the SKILL.md text
 only. `install-guide.tsx` gives the exact path and one-line unzip commands.
+
+### Legal pages
+
+`/terms`, `/privacy`, `/refunds` and `/contact` are public server pages built on
+`components/legal-page.tsx`. The facts they depend on (operator, governing state, contact email,
+last-updated date) live in `lib/legal.ts`, so incorporating means editing one file. The Privacy Policy
+makes factual claims about the code: no analytics, transcripts not stored, IPs only held in memory,
+the list of processors (Clerk, Supabase, Stripe, Anthropic, Supadata, Vercel). **Any change to data
+handling must update `privacy/page.tsx` in the same PR.** Account deletion is by email request (there is
+no in-app flow, and the Clerk webhook does not cascade deletes), and the policy promises it within 30 days.
 
 ### Account settings (`/settings`)
 
