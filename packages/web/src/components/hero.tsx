@@ -87,8 +87,9 @@ export default function Hero() {
         execution
       </span>
 
-      <h1 className="font-heading text-5xl md:text-7xl font-800 tracking-tight mb-6">
-        Stop watching.{' '}
+      <h1 className="font-heading text-5xl md:text-7xl font-bold tracking-tight leading-[1.05] mb-6">
+        Stop watching.
+        <br />
         <span className="text-accent gold-text-glow">Start doing.</span>
       </h1>
 

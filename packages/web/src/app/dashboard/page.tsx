@@ -1,48 +1,30 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { UserButton } from '@clerk/nextjs';
-import SkillCard from '@/components/skill-card';
+import SkillTile from '@/components/skill-tile';
 import ShareToggle from '@/components/share-toggle';
-import InstallGuide from '@/components/install-guide';
 import SkillEditModal from '@/components/skill-edit-modal';
-import { buildSkillsZip, downloadBlob } from '@/lib/export-zip';
+import LibraryDetail, { type LibraryGroup, type LibrarySkill } from '@/components/library-detail';
+import VideoHeader, { VideoThumb } from '@/components/video-header';
 import Footer from '@/components/footer';
+import { buildSkillsZip, downloadBlob } from '@/lib/export-zip';
+import { getRecentJacks } from '@/lib/api-client';
+import { skillDescription, videoIdFromUrl, type RecentJack } from '@/lib/jack-view';
+import { cleanSourceUrl } from '@/lib/source-url';
 import { videosLeft } from '@/lib/usage-tracker';
 
-interface DbSkill {
-  id: string;
-  name: string;
-  slug: string;
-  content: string;
-  source_title: string | null;
-  source_url: string | null;
-  format: string;
-  created_at: string;
-  share_id?: string | null;
-  is_public?: boolean | null;
-  is_edited?: boolean | null;
-}
-
-interface ExtractionGroup {
-  key: string;
-  shareId: string | null;
-  isPublic: boolean;
-  sourceTitle: string;
-  skills: DbSkill[];
-}
-
 /**
- * Group skills into the extraction they came from. share_id is written per
- * POST /api/skills, so it identifies one extraction.
+ * Group skills by the jack they came from. share_id is one per jack (and was
+ * one per save before jacks were stored), so it identifies the video.
  *
  * Skills saved before share ids existed have no share_id; they are grouped by
  * source title so they still render, but they get no share control — there is
  * no id to publish, and inventing one retroactively would let a single click
  * publish content saved when sharing did not exist.
  */
-function groupByExtraction(skills: DbSkill[]): ExtractionGroup[] {
-  const groups = new Map<string, ExtractionGroup>();
+function groupByVideo(skills: LibrarySkill[]): LibraryGroup[] {
+  const groups = new Map<string, LibraryGroup>();
 
   for (const skill of skills) {
     const sourceTitle = skill.source_title || 'Untitled source';
@@ -55,6 +37,9 @@ function groupByExtraction(skills: DbSkill[]): ExtractionGroup[] {
         shareId: skill.share_id ?? null,
         isPublic: Boolean(skill.is_public),
         sourceTitle,
+        sourceUrl: skill.source_url ? cleanSourceUrl(skill.source_url) : null,
+        sourceChannel: skill.source_channel ?? null,
+        videoId: skill.source_video_id ?? videoIdFromUrl(skill.source_url ?? ''),
         skills: [],
       };
       groups.set(key, group);
@@ -72,23 +57,66 @@ interface UsageInfo {
   remaining: number;
 }
 
-export default function DashboardPage() {
-  const [skills, setSkills] = useState<DbSkill[]>([]);
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+function RecentJacks({ jacks }: { jacks: RecentJack[] }) {
+  if (jacks.length === 0) return null;
+  return (
+    <div className="mb-10">
+      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+        <h2 className="font-heading text-sm font-semibold text-text-primary">Recent jacks</h2>
+        <span className="text-xs text-text-tertiary">Not saved yet. Open one to pick skills to keep.</span>
+      </div>
+      <div className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-2">
+        {jacks.map((j) => (
+          <a
+            key={j.id}
+            href={`/?jack=${j.id}`}
+            className="flex w-60 shrink-0 gap-3 rounded-lg border border-border-subtle bg-surface p-3
+                       transition-colors hover:border-border-focus/60"
+          >
+            <VideoThumb videoId={j.videoId} className="h-12 w-20" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold leading-5 text-text-primary line-clamp-2">{j.sourceTitle}</p>
+              <p className="mt-1 text-xs text-accent">
+                {j.unsavedSkills === j.totalSkills
+                  ? `${plural(j.totalSkills, 'skill')} unsaved`
+                  : `${j.unsavedSkills} of ${j.totalSkills} unsaved`}
+              </p>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function LibraryPage() {
+  const [skills, setSkills] = useState<LibrarySkill[]>([]);
+  const [recent, setRecent] = useState<RecentJack[]>([]);
   const [loading, setLoading] = useState(true);
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [billingLoading, setBillingLoading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openId, setOpenId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [zipping, setZipping] = useState(false);
 
   const isPro = usage?.tier === 'pro';
+
+  const fetchRecent = useCallback(() => {
+    getRecentJacks().then(setRecent).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch('/api/usage')
       .then((res) => (res.ok ? res.json() : null))
       .then((data: UsageInfo | null) => { if (data) setUsage(data); })
       .catch(() => {});
-  }, []);
+    fetchRecent();
+  }, [fetchRecent]);
 
   const fetchSkills = useCallback(async () => {
     try {
@@ -108,17 +136,22 @@ export default function DashboardPage() {
     fetchSkills();
   }, [fetchSkills]);
 
-  const handleDelete = async (id: string) => {
+  const groups = useMemo(() => groupByVideo(skills), [skills]);
+  const openGroup = groups.find((g) => g.skills.some((s) => s.id === openId)) ?? null;
+
+  const handleDelete = async (id: string): Promise<boolean> => {
     const res = await fetch(`/api/skills/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setSkills((prev) => prev.filter((s) => s.id !== id));
-      setSelected((prev) => {
-        if (!prev.has(id)) return prev;
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }
+    if (!res.ok) return false;
+    setSkills((prev) => prev.filter((s) => s.id !== id));
+    setSelected((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    // A deleted library copy returns to its jack's unsaved skills.
+    fetchRecent();
+    return true;
   };
 
   const toggleSelect = (id: string) => {
@@ -168,18 +201,16 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen">
-      <section className="pt-16 pb-8 px-6">
-        <div className="max-w-5xl mx-auto">
+      <section className="pt-10 pb-8 px-6">
+        <div className="max-w-6xl mx-auto">
           {/* Header */}
-          <div className="flex items-center justify-between mb-10">
+          <div className="flex items-start justify-between gap-4 mb-8">
             <div>
               <a href="/" className="font-heading text-sm text-text-secondary hover:text-text-primary transition-colors">
-                &larr; Back
+                &larr; Jack a video
               </a>
               <div className="flex items-center gap-3 mt-2">
-                <h1 className="font-heading text-3xl font-bold">
-                  Your <span className="text-accent">Skills</span>
-                </h1>
+                <h1 className="font-heading text-3xl font-bold">Library</h1>
                 {usage && (
                   usage.tier === 'pro' ? (
                     <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-accent/20 text-accent">
@@ -192,10 +223,16 @@ export default function DashboardPage() {
                   )
                 )}
               </div>
+              <p className="mt-1 text-sm text-text-secondary">
+                {plural(skills.length, 'skill')} from {plural(groups.length, 'video')}
+                {usage && <span className="text-text-tertiary"> &middot; {videosLeft(usage.used, usage.limit)}</span>}
+              </p>
             </div>
 
             <UserButton />
           </div>
+
+          <RecentJacks jacks={recent} />
 
           {/* Bulk export control. Shown to free users too, with an upgrade
               prompt rather than a hidden feature. */}
@@ -220,25 +257,27 @@ export default function DashboardPage() {
                   <a href="/pricing" className="text-accent hover:text-accent-hover underline underline-offset-4">
                     Pro feature
                   </a>
-                  . Upgrade to select skills and download them as a zip.
+                  . Upgrade to select skills across videos and download them as one zip.
                 </p>
               )}
             </div>
           )}
 
-          {skills.length > 0 && (
-            <InstallGuide format="claude-skill" className="-mt-2 mb-8" />
-          )}
-
-          {/* Skills grouped by extraction — the extraction is the shareable unit */}
+          {/* Skills grouped by video — the video is the shareable unit */}
           {skills.length > 0 ? (
             <div className="space-y-10">
-              {groupByExtraction(skills).map((group) => (
+              {groups.map((group) => (
                 <div key={group.key}>
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                    <h2 className="font-heading text-sm font-semibold text-text-secondary">
-                      {group.sourceTitle}
-                    </h2>
+                    <VideoHeader
+                      size="sm"
+                      sourceTitle={group.sourceTitle}
+                      sourceChannel={group.sourceChannel}
+                      sourceUrl={group.sourceUrl}
+                      videoId={group.videoId}
+                    >
+                      <span>{plural(group.skills.length, 'skill')}</span>
+                    </VideoHeader>
                     {group.shareId && (
                       <ShareToggle
                         shareId={group.shareId}
@@ -246,22 +285,24 @@ export default function DashboardPage() {
                       />
                     )}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {group.skills.map((skill) => (
-                      <SkillCard
+                      <SkillTile
                         key={skill.id}
-                        id={skill.id}
                         name={skill.name}
-                        sourceTitle={skill.source_title ?? ''}
-                        generatedAt={skill.created_at}
-                        format={skill.format}
-                        content={skill.content}
-                        slug={skill.slug}
-                        onDelete={handleDelete}
-                        isEdited={Boolean(skill.is_edited)}
+                        description={skill.description ?? skillDescription(skill.content)}
+                        badge={
+                          skill.format === 'cursor-rules'
+                            ? 'Cursor rules'
+                            : skill.format === 'windsurf-rules'
+                              ? 'Windsurf rules'
+                              : skill.is_edited
+                                ? 'Edited'
+                                : undefined
+                        }
                         selected={selected.has(skill.id)}
-                        onToggleSelect={isPro ? toggleSelect : undefined}
-                        onEdit={isPro ? setEditingId : undefined}
+                        onToggleSelect={isPro ? () => toggleSelect(skill.id) : undefined}
+                        onOpen={() => setOpenId(skill.id)}
                       />
                     ))}
                   </div>
@@ -270,9 +311,11 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="text-center py-20">
-              <p className="text-text-secondary text-lg mb-2">No skills yet.</p>
+              <p className="text-text-secondary text-lg mb-2">No saved skills yet.</p>
               <p className="text-text-tertiary text-sm mb-6">
-                Go jack a skill from a YouTube video to get started.
+                {recent.length > 0
+                  ? 'Open a recent jack above and save the skills you want to keep.'
+                  : 'Jack a YouTube video, then save the skills you want to keep.'}
               </p>
               <a
                 href="/"
@@ -280,22 +323,14 @@ export default function DashboardPage() {
                            text-sm rounded-lg hover:bg-accent-hover hover:gold-glow
                            transition-all duration-200"
               >
-                Jack a Skill
+                Jack a video
               </a>
             </div>
           )}
 
-          {/* Cloud sync badge */}
-          <div className="mt-16 p-6 bg-surface border border-border-subtle rounded-lg text-center">
-            <p className="text-text-secondary text-sm">
-              Your skills are <span className="text-accent font-medium">synced to the cloud</span>.
-              Access them from any device.
-            </p>
-          </div>
-
           {/* Billing section */}
           {usage && (
-            <div className="mt-4 p-6 bg-surface border border-border-subtle rounded-lg text-center">
+            <div className="mt-16 p-6 bg-surface border border-border-subtle rounded-lg text-center">
               <p className="text-text-secondary text-sm mb-4">
                 {videosLeft(usage.used, usage.limit)}
               </p>
@@ -363,6 +398,18 @@ export default function DashboardPage() {
             Clear
           </button>
         </div>
+      )}
+
+      {openGroup && openId && (
+        <LibraryDetail
+          group={openGroup}
+          openId={openId}
+          isPro={isPro}
+          onOpen={setOpenId}
+          onClose={() => { if (!editingId) setOpenId(null); }}
+          onEdit={setEditingId}
+          onDelete={handleDelete}
+        />
       )}
 
       {editingSkill && (

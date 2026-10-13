@@ -13,14 +13,14 @@ const OEMBED_TIMEOUT_MS = 15_000;
 const MAX_TRANSCRIPT_WORDS = 50_000;
 const MIN_TRANSCRIPT_WORDS = 100;
 
-async function fetchVideoMetadata(url: string): Promise<{ title: string }> {
+async function fetchVideoMetadata(url: string): Promise<{ title: string; channel?: string }> {
   const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
   const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(OEMBED_TIMEOUT_MS) });
   if (!res.ok) {
     throw new ExtractionError('Could not fetch video metadata. Check that the URL is valid.');
   }
   const data = (await res.json()) as OEmbedResponse;
-  return { title: data.title };
+  return { title: data.title, channel: data.author_name || undefined };
 }
 
 function validateAndCap(transcript: string): string {
@@ -38,7 +38,7 @@ export async function extractYouTube(
 ): Promise<RawContent> {
   const onDebug = opts?.onDebug;
 
-  let metadata: { title: string };
+  let metadata: { title: string; channel?: string };
   try {
     metadata = await fetchVideoMetadata(sourceUrl);
   } catch {
@@ -80,6 +80,7 @@ export async function extractYouTube(
     onDebug?.(`Stage 1 succeeded (${words.length} words via captions)`);
     return {
       title: metadata.title,
+      channel: metadata.channel,
       transcript: text,
       duration: `${m}:${s.toString().padStart(2, '0')}`,
       sourceUrl,
@@ -111,6 +112,7 @@ export async function extractYouTube(
       if (text.split(/\s+/).length >= MIN_TRANSCRIPT_WORDS) {
         return {
           title: metadata.title,
+          channel: metadata.channel,
           transcript: text,
           duration: supadataResult.duration,
           sourceUrl,
@@ -132,6 +134,7 @@ export async function extractYouTube(
     if (text.split(/\s+/).length >= MIN_TRANSCRIPT_WORDS) {
       return {
         title: metadata.title,
+        channel: metadata.channel,
         transcript: text,
         duration: ytdlpResult.duration,
         sourceUrl,
@@ -153,6 +156,7 @@ export async function extractYouTube(
     if (text.split(/\s+/).length >= MIN_TRANSCRIPT_WORDS) {
       return {
         title: metadata.title,
+        channel: metadata.channel,
         transcript: text,
         duration: whisperResult.duration,
         sourceUrl,
@@ -177,6 +181,7 @@ export async function extractYouTube(
     onDebug?.(`Stage 5 succeeded (${metaResult.transcript.split(/\s+/).length} words via metadata)`);
     return {
       title: metadata.title,
+      channel: metadata.channel,
       transcript: metaResult.transcript,
       duration: metaResult.duration,
       sourceUrl,

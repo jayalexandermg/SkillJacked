@@ -1,89 +1,21 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getSupabase } from '@/lib/supabase';
-
-function getCurrentPeriod() {
-  const now = new Date();
-  const periodStart = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    1
-  ).toISOString();
-  const periodEnd = new Date(
-    now.getFullYear(),
-    now.getMonth() + 1,
-    1
-  ).toISOString();
-  return { periodStart, periodEnd };
-}
-
-async function findOrCreateUsage(userId: string, jacksLimit: number) {
-  const supabase = getSupabase();
-  const { periodStart, periodEnd } = getCurrentPeriod();
-
-  const { data: existing } = await supabase
-    .from('usage')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('period_start', periodStart)
-    .single();
-
-  if (existing) return existing;
-
-  const { data: created } = await supabase
-    .from('usage')
-    .insert({
-      user_id: userId,
-      jacks_used: 0,
-      jacks_limit: jacksLimit,
-      period_start: periodStart,
-      period_end: periodEnd,
-    })
-    .select()
-    .single();
-
-  return created;
-}
+import { ensureUsageRow, tierLimit } from '@/lib/usage-server';
 
 export async function GET() {
   const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({
-      used: 0,
-      limit: 3,
-      tier: 'free',
-      remaining: 3,
-    });
-  }
+  const anonymous = { used: 0, limit: tierLimit('free'), tier: 'free', remaining: tierLimit('free') };
+  if (!userId) return NextResponse.json(anonymous);
 
-  const supabase = getSupabase();
+  const { data: user } = await getSupabase().from('users').select('id, tier').eq('clerk_id', userId).single();
+  if (!user) return NextResponse.json(anonymous);
 
-  const { data: user } = await supabase
-    .from('users')
-    .select('id, tier')
-    .eq('clerk_id', userId)
-    .single();
-
-  if (!user) {
-    return NextResponse.json({
-      used: 0,
-      limit: 3,
-      tier: 'free',
-      remaining: 3,
-    });
-  }
-
-  const tier = user.tier || 'free';
-  const limit = tier === 'pro' ? 50 : 3;
-  const usage = await findOrCreateUsage(user.id, limit);
+  const tier = user.tier === 'pro' ? 'pro' : 'free';
+  const usage = await ensureUsageRow(user.id, tierLimit(tier));
 
   const used = usage?.jacks_used ?? 0;
-  const effectiveLimit = usage?.jacks_limit ?? limit;
+  const limit = usage?.jacks_limit ?? tierLimit(tier);
 
-  return NextResponse.json({
-    used,
-    limit: effectiveLimit,
-    tier,
-    remaining: Math.max(0, effectiveLimit - used),
-  });
+  return NextResponse.json({ used, limit, tier, remaining: Math.max(0, limit - used) });
 }

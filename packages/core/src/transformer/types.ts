@@ -2,6 +2,7 @@ export interface StructuredSkill {
   name: string;
   segmentSlug?: string;
   sourceTitle: string;
+  sourceChannel?: string;
   sourceUrl: string;
   generatedAt: string;
   content: string;

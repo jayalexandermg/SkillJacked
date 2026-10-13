@@ -82,7 +82,7 @@ export async function generateMetadata({
   const description =
     `Executable AI skills extracted from ${sourceTitle}` +
     (names ? `: ${names}${skills.length > 3 ? ', and more' : ''}.` : '.') +
-    ' Ready for Claude Code, Cursor, and Windsurf.';
+    ' Ready for Claude Code, Codex, Cursor, and Gemini CLI.';
 
   const url = `${process.env.NEXT_PUBLIC_APP_URL || 'https://skilljacked.com'}/j/${shareId}`;
 
@@ -205,7 +205,7 @@ export default async function SharedExtractionPage({
           </h2>
           <p className="font-body text-text-secondary mb-6">
             Paste a YouTube URL and get executable skill files for Claude Code,
-            Cursor, and Windsurf.
+            Codex, Cursor, and Gemini CLI.
           </p>
           <a
             href="/"

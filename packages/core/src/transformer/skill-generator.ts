@@ -71,6 +71,7 @@ export async function generateSkill(
   return {
     name,
     sourceTitle: rawContent.title,
+    sourceChannel: rawContent.channel,
     sourceUrl: rawContent.sourceUrl,
     generatedAt: new Date().toISOString(),
     content: setFrontmatterName(text, name),
@@ -259,6 +260,7 @@ export async function generateSkillsFromPlan(
             name,
             segmentSlug: segment.proposed_slug,
             sourceTitle: rawContent.title,
+            sourceChannel: rawContent.channel,
             sourceUrl: rawContent.sourceUrl,
             generatedAt: new Date().toISOString(),
             content: setFrontmatterName(text, name),

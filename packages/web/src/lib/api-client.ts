@@ -1,43 +1,62 @@
-export interface SkillData {
-  skill: {
-    name: string;
-    sourceTitle: string;
-    sourceUrl: string;
-    generatedAt: string;
-    content: string;
-  };
-  formatted: {
-    content: string;
-    filename: string;
-    format: string;
-  };
+import type { JackView, RecentJack } from '@/lib/jack-view';
+
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number, readonly upgrade = false) {
+    super(message);
+  }
 }
 
 // Slightly above the API route's maxDuration (280s) so a server-side timeout
 // surfaces as a clean error before the client's own wait gives up first.
 const JACK_TIMEOUT_MS = 285_000;
 
-export async function jackSkills(url: string): Promise<SkillData[]> {
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch('/api/jack', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, format: 'claude-skill' }),
-      signal: AbortSignal.timeout(JACK_TIMEOUT_MS),
-    });
+    res = await fetch(path, init);
   } catch (err) {
     if (err instanceof Error && err.name === 'TimeoutError') {
-      throw new Error('Extraction is taking longer than expected. Try a shorter video or try again.');
+      throw new ApiError('Extraction is taking longer than expected. Try a shorter video or try again.', 0);
     }
-    throw new Error('Network error. Please check your connection and try again.');
+    throw new ApiError('Network error. Please check your connection and try again.', 0);
   }
 
+  const body = await res.json().catch(() => null);
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `Request failed with status ${res.status}`);
+    throw new ApiError(body?.error || `Request failed with status ${res.status}`, res.status, body?.upgrade === true);
   }
+  return body as T;
+}
 
-  const data = await res.json();
-  return data.skills;
+function post<T>(path: string, payload: unknown, init?: RequestInit): Promise<T> {
+  return request<T>(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    ...init,
+  });
+}
+
+/** Run a jack. Null when the video yielded no skills (and cost nothing). */
+export async function runJack(url: string): Promise<JackView | null> {
+  const { jack } = await post<{ jack: JackView | null }>('/api/jack', { url }, {
+    signal: AbortSignal.timeout(JACK_TIMEOUT_MS),
+  });
+  return jack;
+}
+
+export async function getJack(id: string): Promise<JackView> {
+  return (await request<{ jack: JackView }>(`/api/jacks/${id}`)).jack;
+}
+
+export async function claimJack(id: string, token: string): Promise<JackView> {
+  return (await post<{ jack: JackView }>(`/api/jacks/${id}/claim`, { token })).jack;
+}
+
+export async function saveJackSkills(id: string, skillIds: string[]): Promise<JackView> {
+  return (await post<{ jack: JackView }>(`/api/jacks/${id}/save`, { skillIds })).jack;
+}
+
+export async function getRecentJacks(): Promise<RecentJack[]> {
+  return (await request<{ jacks: RecentJack[] }>('/api/jacks')).jacks;
 }
