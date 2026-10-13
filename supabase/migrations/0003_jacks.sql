@@ -42,6 +42,11 @@ create table if not exists jack_skills (
   unique (jack_id, position)
 );
 
+-- RLS on with no policies: only the service-role key (which bypasses RLS) can
+-- touch these tables, so the project's public anon key can't read results.
+alter table jacks enable row level security;
+alter table jack_skills enable row level security;
+
 alter table skills add column if not exists jack_id uuid references jacks(id) on delete set null;
 -- Already in the documented schema; guarded in case an early database predates it.
 alter table skills add column if not exists description text;
