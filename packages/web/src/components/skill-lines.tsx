@@ -8,7 +8,8 @@ type LineKind = 'fence' | 'key' | 'frontmatter' | 'heading' | 'list' | 'body';
 const KEY_LINE = /^([A-Za-z_][\w-]*:)(.*)$/;
 const HEADING_LINE = /^ {0,3}#{1,6}(?:[ \t]|$)/;
 const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-const LIST_PREFIX = /^ {0,3}(?:[-+*]|\d{1,9}[.)]) {1,4}(?=[`~])/;
+const LIST_PREFIX = /^ {0,3}(?:[-+*]|\d{1,9}[.)]) {1,4}(?=\S|$)/;
+const THEMATIC_BREAK = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,})$/;
 
 /**
  * Classify every line once, over the whole file, so the frontmatter block is
@@ -20,6 +21,7 @@ export function classifyLines(lines: string[]): LineKind[] {
     ? lines.findIndex((line, i) => i > 0 && line.trim() === '---')
     : -1;
   let codeFence: { marker: string; indent: string } | null = null;
+  const listIndents: string[] = [];
 
   return lines.map((line, i) => {
     if (closing > 0 && i <= closing) {
@@ -45,10 +47,19 @@ export function classifyLines(lines: string[]): LineKind[] {
       }
       return 'body';
     }
-    const listPrefix = source.match(LIST_PREFIX)?.[0] ?? '';
-    const fence = source.slice(listPrefix.length).match(CODE_FENCE);
+    if (source.trim()) {
+      while (listIndents.length && !source.startsWith(listIndents[listIndents.length - 1])) {
+        listIndents.pop();
+      }
+    }
+    const listIndent = listIndents[listIndents.length - 1] ?? '';
+    const blockSource = source.slice(listIndent.length);
+    const listPrefix = THEMATIC_BREAK.test(blockSource) ? '' : blockSource.match(LIST_PREFIX)?.[0] ?? '';
+    const containerIndent = listIndent + ' '.repeat(listPrefix.length);
+    if (listPrefix) listIndents.push(containerIndent);
+    const fence = source.slice(containerIndent.length).match(CODE_FENCE);
     if (fence && (fence[1][0] === '~' || !fence[2].includes('`'))) {
-      codeFence = { marker: fence[1], indent: ' '.repeat(listPrefix.length) };
+      codeFence = { marker: fence[1], indent: containerIndent };
       return 'body';
     }
     if (HEADING_LINE.test(source)) return 'heading';
