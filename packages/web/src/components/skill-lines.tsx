@@ -1,11 +1,15 @@
 /**
  * SKILL.md syntax colouring, shared by every view that shows a skill: keys
- * gold, values white, headings bold white, prose grey.
+ * and headings gold, values white, prose grey.
  */
 
 type LineKind = 'fence' | 'key' | 'frontmatter' | 'heading' | 'list' | 'body';
 
 const KEY_LINE = /^([A-Za-z_][\w-]*:)(.*)$/;
+const HEADING_LINE = /^ {0,3}#{1,6}(?:[ \t]|$)/;
+const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const LIST_PREFIX = /^ {0,3}(?:[-+*]|\d{1,9}[.)]) {1,4}(?=\S|$)/;
+const THEMATIC_BREAK = /^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,})$/;
 
 /**
  * Classify every line once, over the whole file, so the frontmatter block is
@@ -16,13 +20,49 @@ export function classifyLines(lines: string[]): LineKind[] {
   const closing = lines[0]?.trim() === '---'
     ? lines.findIndex((line, i) => i > 0 && line.trim() === '---')
     : -1;
+  let codeFence: { marker: string; indent: string } | null = null;
+  const listIndents: string[] = [];
 
   return lines.map((line, i) => {
     if (closing > 0 && i <= closing) {
       if (i === 0 || i === closing) return 'fence';
       return KEY_LINE.test(line) ? 'key' : 'frontmatter';
     }
-    if (line.startsWith('#')) return 'heading';
+    const source = line.replace(/\r$/, '').replace(
+      /^( {0,3}(?:[-+*]|\d{1,9}[.)]))?([ \t]+)/,
+      (_, marker: string = '', whitespace: string) => {
+        let width = marker.length;
+        for (const char of whitespace) width += char === '\t' ? 4 - (width % 4) : 1;
+        return marker + ' '.repeat(width - marker.length);
+      },
+    );
+    // A list's fenced block ends when its container ends, even without a closer.
+    if (codeFence?.indent && source.trim() && !source.startsWith(codeFence.indent)) {
+      codeFence = null;
+    }
+    if (codeFence !== null) {
+      const fence = source.slice(codeFence.indent.length).match(CODE_FENCE);
+      if (fence && fence[1][0] === codeFence.marker[0] && fence[1].length >= codeFence.marker.length && /^[ \t]*$/.test(fence[2])) {
+        codeFence = null;
+      }
+      return 'body';
+    }
+    if (source.trim()) {
+      while (listIndents.length && !source.startsWith(listIndents[listIndents.length - 1])) {
+        listIndents.pop();
+      }
+    }
+    const listIndent = listIndents[listIndents.length - 1] ?? '';
+    const blockSource = source.slice(listIndent.length);
+    const listPrefix = THEMATIC_BREAK.test(blockSource) ? '' : blockSource.match(LIST_PREFIX)?.[0] ?? '';
+    const containerIndent = listIndent + ' '.repeat(listPrefix.length);
+    if (listPrefix) listIndents.push(containerIndent);
+    const fence = source.slice(containerIndent.length).match(CODE_FENCE);
+    if (fence && (fence[1][0] === '~' || !fence[2].includes('`'))) {
+      codeFence = { marker: fence[1], indent: containerIndent };
+      return 'body';
+    }
+    if (HEADING_LINE.test(source)) return 'heading';
     if (/^\s*([-*]|\d+\.)\s/.test(line)) return 'list';
     return 'body';
   });
@@ -31,7 +71,7 @@ export function classifyLines(lines: string[]): LineKind[] {
 const KIND_CLASS: Record<Exclude<LineKind, 'key'>, string> = {
   fence: 'text-accent font-semibold',
   frontmatter: 'text-text-primary',
-  heading: 'text-text-primary font-semibold',
+  heading: 'text-accent font-semibold',
   list: 'text-text-primary',
   body: 'text-text-secondary',
 };
