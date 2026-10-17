@@ -1,0 +1,705 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SkillJacked — promo</title>
+<style>
+@font-face { font-family: 'Syne'; src: url(data:font/woff2;base64,%%SYNE%%) format('woff2'); font-weight: 400 800; }
+@font-face { font-family: 'DM Sans'; src: url(data:font/woff2;base64,%%DMSANS%%) format('woff2'); font-weight: 100 1000; }
+@font-face { font-family: 'JetBrains Mono'; src: url(data:font/woff2;base64,%%JBMONO%%) format('woff2'); font-weight: 100 800; }
+
+html, body { margin: 0; padding: 0; background: #0a0a0f; overflow: hidden; }
+#stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0a0a0f; }
+canvas { position: absolute; left: 0; top: 0; }
+#world { position: absolute; left: 0; top: 0; width: 1440px; height: 2400px; transform-origin: 0 0; }
+.abs { position: absolute; }
+.syne { font-family: 'Syne', sans-serif; }
+.dm { font-family: 'DM Sans', sans-serif; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Landing */
+#headline { left: 0; width: 1440px; text-align: center; font-size: 72px; font-weight: 700; line-height: 1.06; letter-spacing: -0.01em; color: #f8fafc; white-space: nowrap; }
+#headline div { display: block; }
+#headGold { color: #e0c866; }
+#subline { left: 0; width: 1440px; text-align: center; font-size: 20px; line-height: 1.6; color: #8a8a9a; white-space: nowrap; }
+#flipSlot { display: inline-block; position: relative; overflow: hidden; vertical-align: bottom; height: 32px; text-align: left; }
+#flipSlot span { position: absolute; left: 0; top: 0; white-space: nowrap; font-weight: 500; }
+
+/* Hero: one shape, never cut */
+#hero { box-sizing: border-box; border: 1.5px solid #e0c866; background: #141419; overflow: hidden; }
+#heroBar { width: 672px; height: 58px; display: flex; }
+#barInput { position: relative; flex: 1; height: 100%; font-size: 16px; color: #f8fafc; }
+#barPlaceholder, #barText { position: absolute; left: 20px; top: 0; line-height: 55px; white-space: pre; }
+#barPlaceholder { color: #5a5a6a; }
+#barSel { position: absolute; top: 15px; height: 25px; left: 18px; background: rgba(224,200,102,.3); border-radius: 2px; }
+#caret { position: absolute; top: 16px; width: 1.5px; height: 23px; background: #e0c866; }
+#barBtn { position: relative; width: 197px; height: 100%; background: #e0c866; color: #0a0a0f; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+#heroGen { width: 220px; height: 264px; }
+.skel { position: absolute; left: 35px; height: 9px; border-radius: 5px; background: rgba(224,200,102,.28); overflow: hidden; }
+.skel i { position: absolute; top: 0; bottom: 0; width: 120px; background: linear-gradient(90deg, rgba(240,216,118,0), rgba(240,216,118,.95), rgba(240,216,118,0)); }
+
+/* Result card (real markup, app/page.tsx) */
+.card { width: 440px; height: 276px; box-sizing: border-box; padding: 20px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: #e0c866; }
+.cname { position: absolute; left: 20px; top: 42px; width: 330px; font-size: 16px; line-height: 22px; font-weight: 600; color: #f8fafc; word-break: break-word; }
+.badge { position: absolute; right: 20px; top: 18px; font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(74,222,128,.4); color: #4ade80; }
+.lbl { position: absolute; left: 20px; }
+.cdesc { position: absolute; left: 20px; top: 118px; width: 400px; font-size: 14px; line-height: 24px; color: #8a8a9a; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.csrc { position: absolute; left: 20px; top: 222px; width: 400px; font-size: 14px; line-height: 24px; color: #8a8a9a; white-space: nowrap; }
+.tile { box-sizing: border-box; border: 1px solid #2a2a35; background: #141419; overflow: hidden; }
+.chipLabel { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #8a8a9a; white-space: nowrap; }
+
+/* Viewer (redesigned result view, real capabilities only) */
+#viewer { width: 916px; height: 636px; }
+#titlebar { left: 0; top: 0; width: 916px; height: 54px; border-bottom: 1px solid #2a2a35; box-sizing: border-box; }
+.dot { position: absolute; top: 21px; width: 12px; height: 12px; border-radius: 6px; opacity: .6; }
+.fname { position: absolute; left: 0; top: 0; width: 916px; line-height: 52px; text-align: center; font-size: 14px; color: #8a8a9a; }
+#tabs { left: 0; top: 54px; width: 916px; height: 62px; border-bottom: 1px solid #2a2a35; box-sizing: border-box; }
+.tab { position: absolute; top: 0; height: 61px; box-sizing: border-box; text-align: center; }
+.tab + .tab { border-left: 1px solid #2a2a35; }
+.tabT { position: absolute; left: 0; right: 0; top: 13px; font-size: 13px; font-weight: 700; letter-spacing: .14em; }
+.tabS { position: absolute; left: 0; right: 0; top: 34px; font-size: 11px; }
+#indicator { top: 113px; height: 2px; background: #e0c866; border-radius: 1px; }
+#code { left: 0; top: 116px; width: 916px; height: 440px; background: #101016; overflow: hidden; }
+.cblock { position: absolute; left: 32px; top: 26px; width: 852px; font-size: 15px; line-height: 26px; white-space: pre-wrap; word-break: break-word; }
+.cblock div { position: relative; }
+.k { color: #e0c866; } .v { color: #e4e4ec; } .fm { color: #8a7a3a; } .h { color: #f8fafc; font-weight: 700; } .b { color: #8a8a9a; } .hc { color: #c4a84d; }
+#bottom { left: 0; top: 556px; width: 916px; height: 80px; border-top: 1px solid #2a2a35; box-sizing: border-box; }
+.vbtn { position: absolute; top: 16px; height: 46px; box-sizing: border-box; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 15px; letter-spacing: .08em; }
+#copyBtn { left: 20px; width: 250px; border: 1px solid #2a2a35; color: #c9c9d3; }
+#copyBtn span { position: absolute; left: 0; right: 0; text-align: center; }
+#dlBtn { left: 284px; width: 610px; background: #e0c866; color: #0a0a0f; font-weight: 700; }
+
+#vHeader { height: 30px; display: flex; align-items: center; }
+#wordmark { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; letter-spacing: .14em; color: #e0c866; }
+#vDivider { width: 1px; height: 18px; background: #2a2a35; margin: 0 16px; }
+#countLabel { font-size: 14px; color: #8a8a9a; white-space: nowrap; }
+.chip { box-sizing: border-box; height: 36px; border-radius: 6px; border: 1px solid #2a2a35; background: #141419; }
+#chip1 { border-color: #e0c866; background: #1b1a17; }
+#chip1 .chipLabel { color: #e0c866; }
+#tagline { left: 0; width: 1440px; text-align: center; font-size: 12px; letter-spacing: .22em; color: #5a5a6a; }
+#another { left: 0; width: 1440px; text-align: center; font-size: 14px; }
+#another span { text-decoration: underline; text-underline-offset: 4px; }
+
+#rings { width: 440px; height: 440px; }
+#status { left: 0; width: 1440px; height: 40px; }
+#status span { position: absolute; left: 0; width: 1440px; text-align: center; font-size: 19px; color: #e0c866; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" width="1920" height="1080"></canvas>
+  <div id="world">
+    <div id="headline" class="abs syne"><div>Stop watching.</div><div id="headGold">Start doing.</div></div>
+    <div id="subline" class="abs dm">Bridging knowledge gaps &amp; turning <span id="flipSlot"><span id="fw0">education</span><span id="fw1">into</span><span id="fw2">execution</span></span></div>
+
+    <svg id="rings" class="abs" viewBox="0 0 440 440" fill="none">
+      <defs>
+        <linearGradient id="rgA" x1="0" y1="0" x2="440" y2="440" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#e0c866" stop-opacity="0"/><stop offset="50%" stop-color="#e0c866" stop-opacity=".9"/><stop offset="100%" stop-color="#c4a84d" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="rgB" x1="440" y1="0" x2="0" y2="440" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#c4a84d" stop-opacity="0"/><stop offset="50%" stop-color="#f0d876" stop-opacity=".7"/><stop offset="100%" stop-color="#e0c866" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <circle id="ringA" cx="220" cy="220" r="196" stroke="url(#rgA)" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="80 40 16 40 120 40 16 80"/>
+      <circle id="ringB" cx="220" cy="220" r="164" stroke="url(#rgB)" stroke-width="1" stroke-linecap="round" stroke-dasharray="20 28 8 28 60 28"/>
+    </svg>
+
+    <div id="tiles"></div>
+
+    <div id="vHeader" class="abs dm">
+      <div id="wordmark" class="syne"><svg width="13" height="20" viewBox="8 3 17 26"><path d="M18.5 3L8 18h6.5L12 29l13-16h-7.5z" fill="#e0c866"/></svg>SKILLJACKED</div>
+      <div id="vDivider"></div>
+    </div>
+    <div id="countLabel" class="abs dm">10 skills extracted</div>
+    <div id="chip1" class="abs chip dm"><div class="chipLabel"></div></div>
+
+    <div id="hero" class="abs">
+      <div id="heroBar" class="abs dm">
+        <div id="barInput"><div id="barSel"></div><span id="barPlaceholder">Paste URL to get started</span><span id="barText"></span><div id="caret"></div></div>
+        <div id="barBtn"><svg width="14" height="22" viewBox="8 3 17 26"><path d="M18.5 3L8 18h6.5L12 29l13-16h-7.5z" fill="#0a0a0f"/></svg><span>Jack This Skill</span></div>
+      </div>
+      <div id="heroGen" class="abs">
+        <div class="skel" id="sk0" style="top:80px"><i></i></div>
+        <div class="skel" id="sk1" style="top:124px"><i></i></div>
+        <div class="skel" id="sk2" style="top:168px"><i></i></div>
+      </div>
+      <div id="heroCard" class="abs card dm"></div>
+      <div id="viewer" class="abs dm">
+        <div id="titlebar" class="abs">
+          <div class="dot" style="left:22px;background:#f87171"></div><div class="dot" style="left:42px;background:#e0c866"></div><div class="dot" style="left:62px;background:#4ade80"></div>
+          <div class="fname mono" id="fn0">content-tier-diagnostic/SKILL.md</div><div class="fname mono" id="fn1">.cursorrules</div><div class="fname mono" id="fn2">.windsurfrules</div>
+        </div>
+        <div id="tabs" class="abs"></div>
+        <div id="code" class="abs mono"></div>
+        <div id="indicator" class="abs"></div>
+        <div id="bottom" class="abs">
+          <div id="copyBtn" class="vbtn"><span id="copyA">COPY</span><span id="copyB">COPIED</span></div>
+          <div id="dlBtn" class="vbtn"><svg width="13" height="20" viewBox="8 3 17 26"><path d="M18.5 3L8 18h6.5L12 29l13-16h-7.5z" fill="#0a0a0f"/></svg>DOWNLOAD</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tagline" class="abs dm">DROP IT IN. LEVEL UP YOUR AGENT.</div>
+    <div id="another" class="abs dm"><span>Jack another skill</span></div>
+    <div id="status" class="abs dm"><span id="st0">Extracting transcript...</span><span id="st1">Analyzing frameworks...</span><span id="st2">Distilling techniques...</span></div>
+  </div>
+  <canvas id="fx" width="1920" height="1080"></canvas>
+  <canvas id="cur" width="1920" height="1080"></canvas>
+</div>
+
+<script>
+'use strict';
+const SKILLS = %%SKILLS%%;
+const SKILL_MD = %%SKILLMD%%;
+
+// ─── Grid ────────────────────────────────────────────────────────────────
+const L = 32;                       // loop length (s): 16 bars at 120 BPM
+const BEAT = 0.5, BAR = 2;
+const bt = (bar, beat = 1, eighths = 0) => (bar - 1) * BAR + (beat - 1) * BEAT + eighths * 0.25;
+
+// ─── Springs ─────────────────────────────────────────────────────────────
+// Closed-form damped step response, 0 → 1.
+function S(x, z, w) {
+  if (x <= 0) return 0;
+  if (z >= 1) return 1 - Math.exp(-w * x) * (1 + w * x);
+  const wd = w * Math.sqrt(1 - z * z);
+  return 1 - Math.exp(-z * w * x) * (Math.cos(wd * x) + (z * w / wd) * Math.sin(wd * x));
+}
+// keys: [[t, v, w?], ...]; keys[0] is the resting value at loop start. Every
+// value returns to it by the loop's end, so adding the previous cycle's
+// residual (the t - ti + L term) makes t = 0 and t = L identical in position
+// and velocity. A key may override omega (used by the stretching indicator).
+const TRACKS = [];
+function track(keys, z = 0.82, w = 18) {
+  TRACKS.push(keys);
+  return (t) => {
+    let v = keys[0][1];
+    for (let i = 1; i < keys.length; i++) {
+      const d = keys[i][1] - keys[i - 1][1];
+      if (d === 0) continue;
+      const ti = keys[i][0], wi = keys[i][2] || w;
+      v += d * (S(t - ti, z, wi) + S(t - ti + L, z, wi));
+    }
+    return v;
+  };
+}
+const fade = (keys, w = 14) => track(keys, 1, w);   // opacity / blur: critically damped, never overshoot
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const wrap = (x) => ((x % L) + L) % L;
+const since = (t, e) => { const d = wrap(t - e); return d >= L / 2 ? d - L : d; };
+// Presence window [tin, tout) with independent enter/exit timing, loop-aware.
+// Entry waits 60 ms so a swapped-in label never overlaps the one leaving.
+function presence(t, tin, tout, w = 16) {
+  const span = wrap(tout - tin), d = wrap(t - tin);
+  const enter = S(d - 0.06, 1, w);
+  const exit = d >= span ? S(d - span, 1, w * 1.4) : 0;
+  return { o: clamp(enter - exit, 0, 1), enter, exit };
+}
+
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let r = Math.imul(a ^ a >>> 15, 1 | a); r = r + Math.imul(r ^ r >>> 7, 61 | r) ^ r; return ((r ^ r >>> 14) >>> 0) / 4294967296; }; }
+
+// ─── Timeline (every state change lands on a beat) ───────────────────────
+const T = {
+  inputClick: bt(1, 2), typeStart: bt(1, 2, 1), btnEnable: bt(2, 3), btnHover: bt(2, 4),
+  jack: bt(3, 1), squeeze: bt(3, 2), card: bt(3, 3), rings: bt(3, 4),
+  split: bt(6, 1), label: bt(6, 3), pushIn: bt(7, 1), cardHover: bt(7, 3), pick: bt(7, 4),
+  grow: bt(8, 1), cascade: bt(8, 2), fname: bt(8, 3), frameCode: bt(9, 1),
+  tabCursor: bt(9, 4), tabWind: bt(10, 4), tabClaude: bt(11, 2), toBottom: bt(11, 2),
+  copyHover: bt(11, 4), copy: bt(12, 1), dlHover: bt(12, 3), dl: bt(12, 4),
+  copied: bt(13, 1), linkHover: bt(13, 3), another: bt(13, 4),
+  fold: bt(14, 1), toBar: bt(14, 2), camHome: bt(14, 3), landing: bt(14, 4),
+  select: bt(15, 2), del: bt(15, 3), btnDim: bt(15, 4),
+  glowHead: bt(16, 1), flipInto: bt(16, 2), flipExec: bt(16, 3), flipBack: bt(16, 4),
+};
+const ACCENTS = [T.jack, T.split, T.tabCursor, T.copy];   // bigger bloom on the key moments
+const URL_TEXT = 'https://youtu.be/YuOSyRj3sXg';
+const CHAR_DT = 0.0625;                                   // typing on 32nds
+
+// World layout.
+const HERO_Y = 320;
+const COLS = [492, 948], ROW0 = 500, ROWH = 292;
+const CARD_W = 440, CARD_H = 276;
+const WIN = { x: 262, y: 380, w: 916, h: 636 };
+const TAB_W = WIN.w / 3;
+const cardPos = (k) => [COLS[k % 2], ROW0 + ROWH * Math.floor(k / 2)];     // k: 0-based skill index
+
+// Camera (world point at screen centre + scale); slower spring than UI.
+const CAM = [
+  [0, 196, 1.95], [T.btnEnable, 268, 2.1], [T.squeeze, 352, 2.05], [bt(5, 3), 352, 1.86],
+  // Cards pour in row by row on 8ths; the camera rides down with them, then
+  // swings back up to the first card.
+  // The swing back up rides a slower spring (omega 4.2) so it stays under
+  // ~1200 px/s, where 8 subframes still blend text without ghosting.
+  [T.split, 760, 1.15, 5.5], [bt(6, 2), 1050, 1.15], [bt(6, 3), 1280, 1.15],
+  [bt(6, 4), 619, 1.52, 4.2], [T.grow, 678, 1.16], [T.frameCode, 702, 1.3],
+  [T.toBottom, 760, 1.36], [bt(13, 2), 870, 1.42], [T.fold, 340, 1.9, 5], [T.camHome, 196, 1.95, 6],
+];
+const camY = track(CAM.map(([t, y, , w]) => [t, y, w]), 0.86, 8);
+const camS = track(CAM.map(([t, , s, w]) => [t, s, w]), 0.86, 8);
+const camera = (t) => ({ x: 720, y: camY(t), s: camS(t) });
+const w2s = (wx, wy, t) => { const c = camera(t); return [(wx - c.x) * c.s + 960, (wy - c.y) * c.s + 540]; };
+
+// Hero shape: bar → generating card → result card 1 → viewer → card → bar.
+const [c1x, c1y] = cardPos(0);
+const HERO = [
+  // t, cx, cy, w, h, r
+  [0, 720, HERO_Y, 672, 58, 14],
+  [T.squeeze, 720, HERO_Y, 330, 150, 20],
+  [T.card, 720, HERO_Y, 220, 264, 24],
+  [T.split, c1x, c1y, CARD_W, CARD_H, 8],
+  [T.grow, 720, WIN.y + WIN.h / 2, WIN.w, WIN.h, 10],
+  [T.fold, 720, HERO_Y, 220, 264, 24],
+  [T.toBar, 720, HERO_Y, 672, 58, 14],
+];
+const heroX = track(HERO.map((k) => [k[0], k[1]]));
+const heroY = track(HERO.map((k) => [k[0], k[2]]));
+const heroW = track(HERO.map((k) => [k[0], k[3]]));
+const heroH = track(HERO.map((k) => [k[0], k[4]]));
+const heroR = track(HERO.map((k) => [k[0], k[5]]));
+const heroSquash = track([[0, 1], [bt(5, 4), 0.95], [T.split, 1]], 0.7, 20);
+const heroLift = track([[0, 0], [T.cardHover, -3], [T.pick, 0]]);
+const heroPress = track([[0, 1], [T.pick, 0.98], [T.pick + 0.1, 1]], 0.72, 40);
+const heroBorderA = fade([[0, 1], [T.grow, 0.32], [T.fold, 1]], 10);
+
+const barContent = fade([[0, 1], [T.jack + 0.06, 0], [T.toBar + 0.05, 1]], 16);
+const genContent = fade([[0, 0], [T.card, 1], [T.split, 0], [T.fold, 1], [T.toBar, 0]], 14);
+const skelW = [0, 1, 2].map((i) => track([[0, 0], [bt(4, 1 + i), 1], [T.split, 0], [T.fold, 1], [T.toBar, 0]]));
+const SKEL_W = [150, 150, 92];
+const cardContent = fade([[0, 0], [T.split + 0.1, 1], [T.grow, 0]], 16);
+const viewerFrame = fade([[0, 0], [T.grow + 0.1, 1], [T.fold - 0.08, 0]], 14);
+
+const heroGlowBase = fade([[0, 0.55], [T.jack, 1], [T.pushIn, 0.5], [T.fold, 1], [T.landing, 0.55]], 6);
+const charge = fade([[0, 0], [bt(4, 4), 1], [bt(5, 1), 0]], 12);
+const headline = fade([[0, 1], [T.jack, 0], [T.landing, 1]], 14);
+const headGlow = fade([[0, 0], [T.glowHead, 1], [T.glowHead + 0.5, 0]], 10);
+const ringsO = fade([[0, 0], [T.rings, 1], [T.split, 0]], 10);
+
+// Input + button.
+const focus = fade([[0, 0], [T.inputClick, 1], [T.jack, 0], [T.select - 0.25, 1], [T.btnDim, 0]], 20);
+const btnO = fade([[0, 0.5], [T.btnEnable, 1], [T.btnDim, 0.5]], 16);
+const btnHover = fade([[0, 0], [T.btnHover, 1], [T.jack + 0.25, 0]], 20);
+const btnPress = track([[0, 1], [T.jack, 0.95], [T.jack + 0.12, 1]], 0.72, 40);
+const selO = fade([[0, 0], [T.select, 1], [T.del, 0]], 30);
+
+// Status lines (real product copy, one per bar like the product's 2 s cadence).
+const STATUS = [[T.card, bt(4, 1)], [bt(4, 1), bt(5, 1)], [bt(5, 1), T.split]];
+
+// Tiles: result cards 2–10 grow out of the hero, then fold into the viewer's
+// chip row, then back into the hero.
+const CHIP_H = 36;
+let CHIPS = [];               // [{x, w}] computed from measured labels in init()
+const TILE = [];
+
+// Viewer: tabs, stretching indicator, code blocks.
+const TABS = [['CLAUDE', 'SKILL.md'], ['CURSOR', '.cursorrules'], ['WINDSURF', '.windsurfrules']];
+const TAB_WINDOWS = [[[T.grow, T.tabCursor], [T.tabClaude, T.fold]], [[T.tabCursor, T.tabWind]], [[T.tabWind, T.tabClaude]]];
+const tabActive = TABS.map((_, i) => fade(i === 0
+  ? [[0, 1], [T.tabCursor, 0], [T.tabClaude, 1]]
+  : i === 1 ? [[0, 0], [T.tabCursor, 1], [T.tabWind, 0]] : [[0, 0], [T.tabWind, 1], [T.tabClaude, 0]], 20));
+// Each edge rides its own spring; the leading edge is faster, so it stretches.
+const FAST = 26, SLOW = 13;
+const indL = track([[0, 0], [T.tabCursor, TAB_W, SLOW], [T.tabWind, 2 * TAB_W, SLOW], [T.tabClaude, 0, FAST]]);
+const indR = track([[0, TAB_W], [T.tabCursor, 2 * TAB_W, FAST], [T.tabWind, 3 * TAB_W, FAST], [T.tabClaude, TAB_W, SLOW]]);
+const tabPress = TABS.map((_, i) => { const c = [T.tabClaude, T.tabCursor, T.tabWind][i]; return track([[0, 1], [c, 0.96], [c + 0.1, 1]], 0.72, 40); });
+
+const copyHover = fade([[0, 0], [T.copyHover, 1], [T.copy + 0.3, 0]], 20);
+const copyPress = track([[0, 1], [T.copy, 0.96], [T.copy + 0.1, 1]], 0.72, 40);
+const copyFlash = fade([[0, 0], [T.copy, 1], [T.copied, 0]], 12);
+const dlHover = fade([[0, 0], [T.dlHover, 1], [T.dl + 0.3, 0]], 20);
+const dlPress = track([[0, 1], [T.dl, 0.97], [T.dl + 0.1, 1]], 0.72, 40);
+const linkHover = fade([[0, 0], [T.linkHover, 1], [T.fold, 0]], 20);
+const linkPress = track([[0, 1], [T.another, 0.95], [T.another + 0.1, 1]], 0.72, 40);
+
+// Viewer chrome outside the hero.
+let HEADER_X = 0, LABEL_HX = 0, LABEL_W = 0;
+const labelO = fade([[0, 0], [T.label, 1], [T.fold - 0.08, 0]], 16);
+const labelMove = track([[0, 0], [T.grow, 1], [T.fold, 0]]);
+const wordmarkO = fade([[0, 0], [T.grow + 0.1, 1], [T.fold - 0.08, 0]], 14);
+const chip1O = fade([[0, 0], [T.grow + 0.15, 1], [T.fold - 0.08, 0]], 14);
+const footO = fade([[0, 0], [bt(8, 2), 1], [T.fold - 0.08, 0]], 12);
+
+// Ambient front layer: fades out over whatever the viewer is reading.
+const ambient = fade([[0, 0.55], [T.jack, 1], [T.pushIn, 0.12], [T.fold, 1], [T.landing, 0.55]], 4);
+
+// Cursor (screen space). Moves start ~0.32 s before their beat.
+const REST = [1478, 884];
+let cursorX, cursorY;
+const CLICKS = [T.inputClick, T.jack, T.pick, T.tabCursor, T.tabWind, T.tabClaude, T.copy, T.dl, T.another, T.select];
+const ACCENT_CLICKS = new Set([T.jack, T.tabCursor, T.copy]);
+const pressT = track([[0, 1], ...CLICKS.flatMap((c) => [[c - 0.02, 0.84], [c + 0.1, 1]])], 0.8, 34);
+
+// ─── DOM ─────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const E = {};
+const bg = $('bg').getContext('2d'), fx = $('fx').getContext('2d'), cur = $('cur').getContext('2d');
+const ARROW = new Path2D('M0 0 L0 24 L6.2 18.2 L10.6 28 L14.6 26.3 L10.3 16.8 L18.6 16.8 Z');
+const SUBFRAME = 1 / 480;
+let charX = [];
+const CODE = [];              // per tab: {el, lines: [el]}
+
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function cardHTML(i) {
+  const s = SKILLS[i];
+  return `<div class="eyebrow">Skill ${i + 1}</div><div class="cname syne">${esc(s.name)}</div><div class="badge mono">Open</div>` +
+    `<div class="lbl eyebrow" style="top:98px">Description</div><div class="cdesc">${esc(s.desc)}</div>` +
+    `<div class="lbl eyebrow" style="top:202px">Source</div><div class="csrc">$30M Writer: Never write AI slop again</div>`;
+}
+function codeLines(tab) {
+  const md = SKILL_MD.split('\n');
+  const body = md.slice(md.indexOf('---', 1) + 1);
+  while (body[0] === '') body.shift();
+  const src = 'https://youtu.be/YuOSyRj3sXg?si=9ZuKEedTSjYgLtRV';
+  const out = [];
+  if (tab === 0) {
+    for (const l of md.slice(0, md.indexOf('---', 1) + 1)) {
+      const m = l.match(/^(\w+):\s?(.*)$/);
+      out.push(l === '---' ? `<span class="fm">---</span>` : m ? `<span class="k">${m[1]}:</span> <span class="v">${esc(m[2])}</span>` : esc(l));
+    }
+    out.push('');
+  } else {
+    const name = tab === 1 ? 'Cursor Rules' : 'Windsurf Rules';
+    out.push(`<span class="hc"># ${name} — $30M Writer: Never write AI slop again</span>`, `<span class="hc"># Source: ${src}</span>`,
+      `<span class="hc"># Generated by SkillJacked (skilljacked.com)</span>`, '');
+  }
+  for (const l of body.slice(0, 12)) out.push(l.startsWith('#') ? `<span class="h">${esc(l)}</span>` : `<span class="b">${esc(l)}</span>`);
+  return out;
+}
+
+function init() {
+  for (const id of ['world', 'headline', 'headGold', 'subline', 'flipSlot', 'hero', 'heroBar', 'heroGen', 'heroCard', 'viewer', 'barText', 'barPlaceholder',
+    'caret', 'barSel', 'barBtn', 'rings', 'ringA', 'ringB', 'status', 'tiles', 'vHeader', 'wordmark', 'countLabel', 'chip1', 'tabs', 'code',
+    'indicator', 'copyBtn', 'copyA', 'copyB', 'dlBtn', 'tagline', 'another']) E[id] = $(id);
+  E.st = [$('st0'), $('st1'), $('st2')];
+  E.sk = [$('sk0'), $('sk1'), $('sk2')];
+  E.fw = [$('fw0'), $('fw1'), $('fw2')];
+  E.fn = [$('fn0'), $('fn1'), $('fn2')];
+
+  const probe = document.createElement('span');
+  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
+  document.body.appendChild(probe);
+  const measure = (text, css) => { probe.style.font = css; probe.textContent = text; return probe.getBoundingClientRect().width; };
+  for (let i = 0; i <= URL_TEXT.length; i++) charX.push(measure(URL_TEXT.slice(0, i), "16px 'DM Sans'"));
+  E.flipSlot.style.width = Math.max(...['education', 'into', 'execution'].map((w) => measure(w, "500 20px 'DM Sans'"))) + 2 + 'px';
+
+  // Viewer header: [wordmark | divider | count], centred; the grid's count
+  // label slides into its slot there.
+  LABEL_W = measure('10 skills extracted', "14px 'DM Sans'");
+  const wmW = E.wordmark.getBoundingClientRect().width;
+  const total = wmW + 33 + LABEL_W;
+  HEADER_X = 720 - total / 2;
+  LABEL_HX = HEADER_X + wmW + 33 + LABEL_W / 2;
+
+  // Chip row: active skill + two more + "+7 more", real titles, truncated.
+  const trunc = (s, max) => { if (measure(s, "14px 'DM Sans'") <= max) return s; let t = s; while (t.length && measure(t + '…', "14px 'DM Sans'") > max) t = t.slice(0, -1); return t.trimEnd() + '…'; };
+  const labels = [trunc(SKILLS[0].title, 230), trunc(SKILLS[1].title, 190), trunc(SKILLS[2].title, 190), '+7 more'];
+  const widths = labels.map((l) => measure(l, "14px 'DM Sans'") + 36);
+  const rowW = widths.reduce((a, b) => a + b, 0) + 10 * (labels.length - 1);
+  let x = 720 - rowW / 2;
+  CHIPS = widths.map((w, i) => { const c = { x: x + w / 2, w, label: labels[i] }; x += w + 10; return c; });
+  E.chip1.firstChild.textContent = labels[0];
+  probe.remove();
+
+  // Result card 1 lives inside the hero; cards 2–10 are tiles.
+  E.heroCard.innerHTML = cardHTML(0);
+  for (let k = 1; k < 10; k++) {
+    const el = document.createElement('div');
+    el.className = 'abs tile dm';
+    el.innerHTML = `<div class="abs card">${cardHTML(k)}</div><div class="chipLabel"></div>`;
+    E.tiles.appendChild(el);
+    const [gx, gy] = cardPos(k);
+    const tl = T.split + 0.25 * Math.floor(k / 2);          // rows launch on 8ths
+    const chip = CHIPS[Math.min(k, 3)];
+    const tf = T.grow + (k <= 2 ? 0 : 0.125);
+    if (k === 3) el.lastChild.textContent = CHIPS[3].label;
+    if (k <= 2) el.lastChild.textContent = CHIPS[k].label;
+    const chipY = WIN.y - 40;
+    const K = (a, b, c, d) => [[0, a], [tl, b], [tf, c], [T.fold, d]];
+    TILE.push({
+      el, card: el.firstChild, chip: el.lastChild,
+      x: track(K(720, gx, chip.x, 720)), y: track(K(HERO_Y, gy, chipY, HERO_Y)),
+      w: track(K(220, CARD_W, chip.w, 220)), h: track(K(264, CARD_H, CHIP_H, 264)), r: track(K(24, 8, 6, 24)),
+      o: fade(k <= 3 ? [[0, 0], [tl, 1], [T.fold, 0]] : [[0, 0], [tl, 1], [tf + 0.3, 0]], 18),
+      co: fade([[0, 1], [tf, 0], [T.fold, 1]], 18),
+      lo: fade([[0, 0], [tf + 0.12, 1], [T.fold - 0.08, 0]], 16),
+    });
+  }
+
+  // Tabs + code blocks.
+  E.tabs.innerHTML = TABS.map(([a, b], i) => `<div class="tab" style="left:${i * TAB_W}px;width:${TAB_W}px"><div class="tabT">${a}</div><div class="tabS">${b}</div></div>`).join('');
+  E.tab = [...E.tabs.children];
+  for (let i = 0; i < 3; i++) {
+    const el = document.createElement('div');
+    el.className = 'cblock';
+    el.innerHTML = codeLines(i).map((l) => `<div>${l || '&nbsp;'}</div>`).join('');
+    E.code.appendChild(el);
+    CODE.push({ el, lines: [...el.children] });
+  }
+
+  // Cursor path, resolved against the camera at each arrival time.
+  const at = (wx, wy, t) => w2s(wx, wy, t);
+  const P = [
+    [0, REST],
+    [T.inputClick - 0.32, at(720 - 336 + 20 + 128, HERO_Y + 2, T.inputClick)],
+    [T.btnHover - 0.32, at(720 + 336 - 92, HERO_Y + 6, T.jack)],
+    [T.squeeze + 0.1, [1490, 900]],
+    [T.cardHover - 0.32, at(c1x - 90, c1y - 70, T.pick)],
+    [T.grow + 0.3, [1560, 760]],
+    [T.tabCursor - 0.82, at(WIN.x + TAB_W * 1.5, WIN.y + 86, T.tabCursor)],
+    [T.tabWind - 0.32, at(WIN.x + TAB_W * 2.5, WIN.y + 86, T.tabWind)],
+    [T.tabClaude - 0.32, at(WIN.x + TAB_W * 0.5, WIN.y + 86, T.tabClaude)],
+    [T.copyHover - 0.32, at(WIN.x + 145, WIN.y + 595, T.copy)],
+    [T.dlHover - 0.32, at(WIN.x + 589, WIN.y + 595, T.dl)],
+    [T.linkHover - 0.32, at(720 + 20, 1094, T.another)],
+    [T.fold + 0.3, [1500, 860]],
+    [T.select - 0.32, at(720 - 336 + 20 + 110, HERO_Y + 2, T.select)],
+    [bt(16, 2) - 0.1, REST],
+  ];
+  cursorX = track(P.map(([t, p]) => [t, p[0]]), 0.9, 15);
+  cursorY = track(P.map(([t, p]) => [t, p[1]]), 0.9, 15);
+
+  const bad = TRACKS.filter((k) => Math.abs(k[k.length - 1][1] - k[0][1]) > 1e-6 || k.some((x, i) => i && x[0] < k[i - 1][0]));
+  if (bad.length) throw new Error(bad.length + ' track(s) do not close the loop or are out of order');
+}
+
+// ─── seek(t): the only place styles are written ──────────────────────────
+function seek(tIn) {
+  const t = wrap(tIn);
+  const cam = camera(t);
+  E.world.style.transform = `translate(960px,540px) scale(${cam.s}) translate(${-cam.x}px,${-cam.y}px)`;
+
+  // Metronome: a pulse lands on the hero every bar downbeat; accents bloom.
+  let pulse = 0;
+  const hit = (e, amp) => { const d = since(t, e); if (d >= 0) pulse += amp * Math.exp(-d / 0.32); else if (d > -0.06) pulse += amp * (1 + d / 0.06) * 0.35; };
+  for (let b = 1; b <= 16; b++) hit(bt(b), 0.5);
+  for (const a of ACCENTS) hit(a, 0.8);
+
+  // Landing copy.
+  const ho = headline(t), hg = headGlow(t);
+  E.headline.style.cssText = `top:${34 - (1 - ho) * 14}px;opacity:${ho};filter:blur(${(1 - ho) * 10}px)`;
+  E.headGold.style.textShadow = `0 0 ${20 + 16 * hg}px rgba(224,200,102,${0.5 + 0.35 * hg}),0 0 ${40 + 40 * hg}px rgba(224,200,102,${0.2 + 0.25 * hg})`;
+  E.subline.style.cssText = `top:204px;opacity:${ho};filter:blur(${(1 - ho) * 8}px)`;
+  // Subline flip (the product's own animation), on beats in bar 16.
+  const FW = [[T.flipBack, T.flipInto], [T.flipInto, T.flipExec], [T.flipExec, T.flipBack]];
+  E.fw.forEach((el, i) => {
+    const p = presence(t, FW[i][0], FW[i][1], 18);
+    el.style.cssText = `color:${i === 1 ? '#f8fafc' : '#e0c866'};opacity:${p.o};transform:translateY(${(p.enter - 1) * 100 + p.exit * 100}%) scale(${1 - 0.1 * (1 - p.o)});filter:blur(${(1 - p.o) * 5}px)`;
+  });
+
+  // Hero shape.
+  const sq = heroSquash(t) * heroPress(t);
+  const hx = heroX(t), hy = heroY(t) + heroLift(t), hw = heroW(t) * sq, hh = heroH(t) * sq, hr = heroR(t);
+  const g = heroGlowBase(t) * (0.35 + 0.65 * Math.min(1.5, pulse)) + charge(t) * 0.8;
+  const ba = heroBorderA(t);
+  // Small crisp rim here; the wide glow is drawn on the background canvas —
+  // large box-shadows on camera-scaled elements clip at GPU tile edges.
+  const f = focus(t);
+  const rim = [lerp(224, 240, f * 0.6), lerp(200, 216, f * 0.6), lerp(102, 118, f * 0.6)].map(Math.round);
+  E.hero.style.cssText = `left:${hx - hw / 2}px;top:${hy - hh / 2}px;width:${hw}px;height:${hh}px;border-radius:${hr}px;` +
+    `border-color:rgba(${rim},${ba});box-shadow:0 0 ${3 + 5 * g}px rgba(224,200,102,${(0.2 + 0.3 * g) * ba})`;
+
+  // Bar content, laid out at bar size and centred in the morphing shape.
+  const bo = barContent(t);
+  E.heroBar.style.cssText = `left:${hw / 2 - 336}px;top:${hh / 2 - 29}px;opacity:${bo};filter:blur(${(1 - bo) * 8}px)`;
+  const typed = t < T.typeStart || t >= T.del ? 0 : clamp(Math.floor((t - T.typeStart) / CHAR_DT) + 1, 0, URL_TEXT.length);
+  E.barText.textContent = URL_TEXT.slice(0, typed);
+  E.barPlaceholder.style.opacity = typed === 0 ? 1 : 0;
+  const typing = t >= T.typeStart && t < T.typeStart + URL_TEXT.length * CHAR_DT + 0.1;
+  const blinkOn = typing || (t * 2) % 1 < 0.5;
+  E.caret.style.cssText = `left:${20 + charX[typed]}px;opacity:${f > 0.5 && blinkOn ? f : 0}`;
+  E.barSel.style.cssText = `width:${charX[URL_TEXT.length] + 4}px;opacity:${selO(t) * (typed ? 1 : 0)}`;
+  const bh = btnHover(t);
+  const bc = [lerp(224, 240, bh), lerp(200, 216, bh), lerp(102, 118, bh)].map(Math.round);
+  E.barBtn.style.cssText = `opacity:${btnO(t)};background:rgb(${bc});transform:scale(${btnPress(t)});` +
+    `box-shadow:0 0 ${10 * bh}px rgba(224,200,102,${0.3 * bh}),0 0 ${40 * bh}px rgba(224,200,102,${0.15 * bh})`;
+
+  // Generating card: skeleton lines, shimmer sweeping once per bar.
+  const go = genContent(t);
+  E.heroGen.style.cssText = `left:${hw / 2 - 110}px;top:${hh / 2 - 132}px;opacity:${go};filter:blur(${(1 - go) * 6}px)`;
+  const sweep = (t % BAR) / BAR;
+  E.sk.forEach((el, i) => { el.style.width = `${Math.max(0, SKEL_W[i] * skelW[i](t))}px`; el.firstChild.style.left = `${-120 + sweep * 300 - i * 18}px`; });
+
+  // Result card 1 (inside the hero), anchored top-left so growth reveals it.
+  const co = cardContent(t);
+  E.heroCard.style.cssText = `left:0;top:0;opacity:${co};filter:blur(${(1 - co) * 6}px)`;
+
+  // Viewer (inside the hero), anchored top-left so growth reveals it.
+  const vo = viewerFrame(t);
+  E.viewer.style.cssText = `left:0;top:0;opacity:${vo};filter:blur(${(1 - vo) * 6}px)`;
+  E.tab.forEach((el, i) => {
+    const a = tabActive[i](t);
+    el.style.background = `rgba(224,200,102,${0.06 * a})`;
+    el.style.transform = `scale(${tabPress[i](t)})`;
+    el.firstChild.style.color = `rgb(${[lerp(138, 224, a), lerp(138, 200, a), lerp(154, 102, a)].map(Math.round)})`;
+    el.lastChild.style.color = `rgb(${[lerp(90, 196, a), lerp(90, 168, a), lerp(106, 77, a)].map(Math.round)})`;
+  });
+  const il = indL(t), ir = indR(t);
+  E.indicator.style.cssText = `left:${il}px;width:${Math.max(2, ir - il)}px`;
+  CODE.forEach((c, i) => {
+    let o = 0, en = 1, ex = 0;
+    for (const [a, b] of TAB_WINDOWS[i]) { const p = presence(t, a, b, 20); if (p.o > o) { o = p.o; en = p.enter; ex = p.exit; } }
+    c.el.style.cssText = `opacity:${o};transform:translateY(${(1 - en) * 8 - ex * 8}px);filter:blur(${(1 - o) * 5}px)`;
+    // First appearance cascades line by line on 32nds.
+    if (i === 0) c.lines.forEach((ln, j) => {
+      const q = t >= T.grow && t < T.fold ? S(t - T.cascade - j * CHAR_DT, 1, 20) : 1;
+      ln.style.cssText = `opacity:${q};transform:translateX(${(1 - q) * -10}px)`;
+    });
+  });
+  E.fn.forEach((el, i) => {
+    let o = 0;
+    for (const [a, b] of TAB_WINDOWS[i]) o = Math.max(o, presence(t, i === 0 && a === T.grow ? T.fname : a, b, 20).o);
+    el.style.cssText = `opacity:${o};filter:blur(${(1 - o) * 4}px)`;
+  });
+  const ch = copyHover(t), cf = copyFlash(t);
+  E.copyBtn.style.cssText = `border-color:rgba(${[lerp(42, 224, Math.max(ch, cf)), lerp(42, 200, Math.max(ch, cf)), lerp(53, 102, Math.max(ch, cf))].map(Math.round)},1);` +
+    `transform:scale(${copyPress(t)});box-shadow:0 0 ${18 * cf}px rgba(224,200,102,${0.35 * cf})`;
+  const pc = presence(t, T.copy, T.copied, 22);
+  E.copyA.style.cssText = `opacity:${1 - pc.o};filter:blur(${pc.o * 4}px);transform:translateY(${-pc.o * 8}px)`;
+  E.copyB.style.cssText = `opacity:${pc.o};color:#e0c866;filter:blur(${(1 - pc.o) * 4}px);transform:translateY(${(1 - pc.o) * 8}px)`;
+  const dh = dlHover(t);
+  E.dlBtn.style.cssText = `background:rgb(${[lerp(224, 240, dh), lerp(200, 216, dh), lerp(102, 118, dh)].map(Math.round)});transform:scale(${dlPress(t)});` +
+    `box-shadow:0 0 ${12 * dh}px rgba(224,200,102,${0.3 * dh}),0 0 ${40 * dh}px rgba(224,200,102,${0.15 * dh})`;
+
+  // Tiles: cards 2–10 → chips.
+  for (const tl of TILE) {
+    const w = tl.w(t), h = tl.h(t), o = tl.o(t);
+    tl.el.style.cssText = `left:${tl.x(t) - w / 2}px;top:${tl.y(t) - h / 2}px;width:${w}px;height:${h}px;border-radius:${tl.r(t)}px;opacity:${o};display:${o < 0.002 ? 'none' : 'block'}`;
+    const c = tl.co(t), l = tl.lo(t);
+    tl.card.style.cssText = `left:0;top:0;opacity:${c};filter:blur(${(1 - c) * 6}px)`;
+    tl.chip.style.cssText = `opacity:${l};filter:blur(${(1 - l) * 4}px)`;
+  }
+
+  // Viewer chrome outside the hero.
+  const lm = labelMove(t), lo = labelO(t), wo = wordmarkO(t);
+  E.countLabel.style.cssText = `left:${lerp(720, LABEL_HX, lm) - LABEL_W / 2}px;top:${lerp(318, 272, lm) - 10}px;opacity:${lo};filter:blur(${(1 - lo) * 5}px)`;
+  E.vHeader.style.cssText = `left:${HEADER_X}px;top:${272 - 15}px;opacity:${wo};filter:blur(${(1 - wo) * 5}px)`;
+  const c1 = chip1O(t);
+  E.chip1.style.cssText = `left:${CHIPS[0].x - CHIPS[0].w / 2}px;top:${WIN.y - 40 - CHIP_H / 2 + (1 - c1) * 14}px;width:${CHIPS[0].w}px;opacity:${c1};filter:blur(${(1 - c1) * 4}px)`;
+  const fo = footO(t), lh = linkHover(t);
+  E.tagline.style.cssText = `top:${WIN.y + WIN.h + 24}px;opacity:${fo}`;
+  E.another.style.cssText = `top:${WIN.y + WIN.h + 64}px;opacity:${fo};color:rgb(${[lerp(138, 248, lh), lerp(138, 250, lh), lerp(154, 252, lh)].map(Math.round)});transform:scale(${linkPress(t)})`;
+
+  // Energy rings (loop-safe periods: 8 s and 6.4 s divide 32 s).
+  E.rings.style.cssText = `left:${720 - 220}px;top:${HERO_Y - 220}px;opacity:${ringsO(t)}`;
+  E.ringA.setAttribute('transform', `rotate(${(t / 8) * 360} 220 220)`);
+  E.ringB.setAttribute('transform', `rotate(${-(t / 6.4) * 360} 220 220)`);
+
+  E.status.style.top = `${HERO_Y + 214}px`;
+  E.st.forEach((el, i) => {
+    const p = presence(t, STATUS[i][0], STATUS[i][1]);
+    el.style.cssText = `top:${(1 - p.enter) * 10 - p.exit * 10}px;opacity:${p.o};filter:blur(${(1 - p.o) * 6}px)`;
+  });
+
+  // Screen-space layers.
+  const [sx, sy] = w2s(hx, hy, t);
+  drawBackground(t, sx, sy, pulse, hw * cam.s / 2, hh * cam.s / 2, hr * cam.s, g * ba);
+  drawParticles(t, sx, sy, hw * cam.s / 2, hh * cam.s / 2);
+  drawRipples(t);
+  drawCursor(t);
+}
+
+function drawBackground(t, sx, sy, pulse, hw, hh, rad, g) {
+  bg.clearRect(0, 0, 1920, 1080);
+  bg.fillStyle = '#0a0a0f'; bg.fillRect(0, 0, 1920, 1080);
+  const a = Math.max(0.35, ambient(t));
+  const breathe = 0.5 + 0.5 * Math.cos(((t % BAR) / BAR) * Math.PI * 2);
+  const r = 620 + 60 * breathe;
+  const grd = bg.createRadialGradient(sx, sy, 0, sx, sy, r);
+  grd.addColorStop(0, `rgba(224,200,102,${(0.05 + 0.035 * Math.min(1, pulse)) * a})`);
+  grd.addColorStop(1, 'rgba(224,200,102,0)');
+  bg.fillStyle = grd; bg.fillRect(0, 0, 1920, 1080);
+  for (const [blur, alpha] of [[40 + 50 * g, 0.1 + 0.3 * g], [110 + 130 * g, 0.05 + 0.14 * g]]) {
+    bg.save();
+    bg.shadowColor = `rgba(224,200,102,${Math.min(1, alpha)})`; bg.shadowBlur = blur;
+    bg.fillStyle = '#141419';
+    bg.beginPath(); bg.roundRect(sx - hw, sy - hh, hw * 2, hh * 2, Math.max(0, Math.min(rad, hw, hh))); bg.fill();
+    bg.restore();
+  }
+}
+
+// Waves of gold particles land on the hero's edge on every downbeat.
+const WAVES = [];
+for (let b = 1; b <= 16; b++) {
+  const r = rng(b * 7919);
+  const n = b === 3 || b === 6 ? 24 : 10;
+  const ps = [];
+  for (let j = 0; j < n; j++) {
+    ps.push({ ang: r() * Math.PI * 2, r0: 360 + r() * 220, dur: 0.9 + r() * 0.6, size: r() < 0.2 ? 4.5 : r() < 0.5 ? 3.2 : 2.2,
+      col: j % 3 === 0 ? [224, 200, 102] : j % 3 === 1 ? [196, 168, 77] : [248, 250, 252], lag: r() * 0.08 });
+  }
+  WAVES.push({ t: bt(b), ps });
+}
+function drawParticles(t, sx, sy, hw, hh) {
+  fx.clearRect(0, 0, 1920, 1080);
+  const a = ambient(t);
+  if (a < 0.01) return;
+  for (const wv of WAVES) {
+    for (const p of wv.ps) {
+      const d = since(t, wv.t - p.lag);
+      if (d < -p.dur || d > 0.12) continue;
+      const u = clamp((d + p.dur) / p.dur, 0, 1);
+      const e = Math.pow(u, 2.3);
+      const dx = Math.cos(p.ang), dy = Math.sin(p.ang);
+      const kEdge = Math.min(hw / Math.max(1e-6, Math.abs(dx)), hh / Math.max(1e-6, Math.abs(dy)));
+      const x = sx + dx * (kEdge + p.r0 * (1 - e)), y = sy + dy * (kEdge + p.r0 * (1 - e));
+      const o = (d > 0 ? 1 - d / 0.12 : Math.min(1, u / 0.18)) * a;
+      fx.beginPath(); fx.arc(x, y, p.size * (d > 0 ? 1 + d * 6 : 1), 0, Math.PI * 2);
+      fx.fillStyle = `rgba(${p.col},${o})`;
+      fx.shadowColor = `rgba(${p.col},${o})`; fx.shadowBlur = 8;
+      fx.fill();
+    }
+  }
+  fx.shadowBlur = 0;
+}
+
+function drawRipples(t) {
+  for (const c of CLICKS) {
+    const d = since(t, c);
+    if (d < 0 || d > 0.7) continue;
+    const big = ACCENT_CLICKS.has(c);
+    const k = S(d, 1, big ? 9 : 12);
+    const x = cursorX(c), y = cursorY(c);
+    fx.lineWidth = 2;
+    fx.beginPath(); fx.arc(x, y, 6 + (big ? 58 : 34) * k, 0, Math.PI * 2);
+    fx.strokeStyle = `rgba(224,200,102,${(1 - k) * 0.9})`; fx.stroke();
+    if (big) { fx.beginPath(); fx.arc(x, y, 4 + 30 * k, 0, Math.PI * 2); fx.strokeStyle = `rgba(240,216,118,${(1 - k) * 0.6})`; fx.stroke(); }
+  }
+}
+
+// Cursor motion blur: average N positions across this subframe's slot with
+// additive compositing at 1/N alpha (an exact premultiplied average), so fast
+// moves blend instead of strobing. Still a pure function of t.
+const SPRITE = document.createElement('canvas');
+SPRITE.width = 64; SPRITE.height = 72;
+{
+  const c = SPRITE.getContext('2d');
+  c.translate(8, 6); c.scale(1.5, 1.5);
+  c.shadowColor = 'rgba(0,0,0,0.45)'; c.shadowBlur = 6; c.shadowOffsetY = 2;
+  c.fillStyle = '#f8fafc'; c.fill(ARROW);
+  c.shadowColor = 'transparent';
+  c.lineWidth = 1.6; c.lineJoin = 'round'; c.strokeStyle = '#0a0a0f'; c.stroke(ARROW);
+}
+function drawCursor(t) {
+  cur.clearRect(0, 0, 1920, 1080);
+  const d = Math.hypot(cursorX(t - SUBFRAME) - cursorX(t), cursorY(t - SUBFRAME) - cursorY(t));
+  const n = clamp(Math.ceil(d / 1.2), 1, 16);
+  cur.save();
+  cur.globalCompositeOperation = 'lighter';
+  cur.globalAlpha = 1 / n;
+  for (let i = 0; i < n; i++) {
+    const tt = t - (SUBFRAME * i) / n;
+    const sc = pressT(tt);
+    cur.setTransform(sc, 0, 0, sc, cursorX(tt), cursorY(tt));
+    cur.drawImage(SPRITE, -8, -6);
+  }
+  cur.restore();
+}
+
+window.seek = seek;
+window.PROMO = { L, bt, T };
+document.fonts.ready.then(() => { init(); seek(0); window.READY = true; });
+</script>
+</body>
+</html>
